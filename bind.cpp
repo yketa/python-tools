@@ -8,15 +8,147 @@ Tools library written in C++ and exposed to Python with pybind11.
 #include <complex>
 #include <vector>
 
+#include <Python.h>
 #include <pybind11/pybind11.h>
 #include <pybind11/numpy.h>
+
+using namespace std::complex_literals;  // using comlex numbers
+
+/*
+ *  MISCELLANEOUS
+ *
+ */
+
+std::vector<double> _get2DL(pybind11::array_t<double> const& L) {
+/*
+Return (2,) box size dimensions from array `L' which may be a double or an
+array of double.
+*/
+
+    auto l = L.unchecked<>();
+    if (l.ndim() > 1) {                             // system size is 2D or higher-D: impossible
+        throw std::invalid_argument("L must be a 0- or 1-dimensional.");
+    }
+    else if (l.size() == 0) {                       // no system size: impossible
+        throw std::invalid_argument("System size cannot be empty.");
+    }
+    else if (l.size() == 1) {                       // system size is the same for both dimensions
+        if (l.ndim() == 0) {
+            return std::vector<double>({l(), l()});
+        }
+        else {  // l.ndim() == 1
+            return std::vector<double>({l(0), l(0)});
+        }
+    }
+    else {                                          // system size is different for the two dimensions
+        return std::vector<double>({l(0), l(1)});
+    }
+}
+
+/*
+ *  Fourier transforms
+ *
+ */
+
+pybind11::array_t<double> getWaveVectors2D(
+    pybind11::array_t<double> const& L,
+    double const& q, double const& dq=0.1) {
+/*
+Return wave vectors associated to rectangular box of size `L' such that their
+norms belong to [`q' - `dq'/2, `q' + `dq'/2].
+Only a single vector of each pair of opposite wave vectors is returned.
+*/
+
+    // check system size
+    std::vector<double> const systemSize = _get2DL(L);
+    double const qx = 2*std::numbers::pi/systemSize[0];
+    double const qy = 2*std::numbers::pi/systemSize[1];
+
+    // loop in wave vector space
+    std::vector<std::vector<double>> waveVectors(0);
+    long long int const xmin = 0;
+    long long int const xmax = floor((q + dq/2)/qx);
+    for (long long int x=xmin; x <= xmax; x++) {
+        long long int const ymin =
+            std::max(
+                0.,
+                ceil(sqrt(pow(q - dq/2, 2) - pow(qx*x, 2))/qy));
+        long long int const ymax =
+            std::min(
+                floor((q + dq/2)/qy),
+                floor(sqrt(pow(q + dq/2, 2) - pow(qx*x, 2))/qy));
+        for (long long int y=ymin; y <= ymax; y++) {
+            double const qq = sqrt(pow(qx*x, 2) + pow(qy*y, 2));
+            if (abs(qq - q) > dq/2) { continue; }   // wave vector norm not within interval
+            waveVectors.push_back({qx*x, qy*y});
+            if (x != 0 && y != 0) {
+                // if x == 0 then (qx x, qy y) and (-qx x, qy y) are identical
+                // if y == 0 then (qx x, qy y) and (-qx x, qy y) are opposite
+                waveVectors.push_back({-qx*x, qy*y});
+            }
+        }
+    }
+
+    // create and return array
+    if (waveVectors.size() == 0) { return pybind11::array_t<double>(); }
+    pybind11::array_t<double>
+        arr(std::vector<ptrdiff_t>{(long long int) waveVectors.size(), 2});
+    auto a = arr.mutable_unchecked<2>();
+    for (long long int l=0; l < (long long int) waveVectors.size(); l++) {
+        for (int dim=0; dim < 2; dim++) {
+            a(l, dim) = waveVectors[l][dim];
+        }
+    }
+    return arr;
+}
+
+pybind11::tuple getFT2D(
+    pybind11::array_t<double> const& positions,
+    pybind11::array_t<double> const& L,
+    pybind11::array_t<std::complex<double>> const& values,
+    double const& q, double const& dq=0.1) {
+/*
+Return 2D Fourier transform of `values' associated to 2D `positions' at 2D wave
+vectors `q'.
+*/
+
+    // wave vector norms
+    pybind11::array_t<double> qARR = getWaveVectors2D(L, q, dq);
+    auto _q = qARR.unchecked<2>();      // direct access to wave vectors
+    long int const n = _q.shape(0);
+
+    // check positions and values arrays
+    auto r = positions.unchecked<2>();  // direct access to positions
+    assert(r.ndim() == 2);
+    assert(r.shape(1) == 2);
+    long int const N = r.shape(0);
+    auto v = values.unchecked<>();      // direct access to first values
+    if (v.shape(0) != N) {
+        throw std::invalid_argument("Positions and values must have = sizes.");
+    }
+    if (v.ndim() > 1) {
+        throw std::invalid_argument("Values must be 1-dimensional.");
+    }
+
+    // compute Fourier transform
+    pybind11::array_t<std::complex<double>> ft({n});
+    auto FT = ft.mutable_unchecked<1>();
+    for (long int l=0; l < n; l++) {        // loop over wave vectors
+        FT(l) = 0;                                                              // initialise
+        for (long int i=0; i < N; i++) {    // loop over particles
+            FT(l) += v(i)*std::exp(-1i*(_q(l, 0)*r(i, 0) + _q(l, 1)*r(i, 1)));  // Fourier term
+        }
+    }
+
+    return pybind11::make_tuple(qARR, ft);
+}
 
 /*
  *  Correlations
  *
  */
 
-pybind11::array_t<std::complex<double>> const get2DRadialCorrelations(
+pybind11::array_t<std::complex<double>> getRadialCorrelations2D(
     pybind11::array_t<double> const& positions,
     pybind11::array_t<double> const& L,
     pybind11::array_t<std::complex<double>> const& values1,
@@ -30,26 +162,7 @@ Return 2D radial correlations of `values1' and `values2' (1D or 2D).
 */
 
     // check system size
-    auto l = L.unchecked<>();
-    std::vector<double> const systemSize = [&l]() {     // system size of the system (for wrapping of distances if using periodic boundary conditions)
-        if (l.ndim() > 1) {                             // system size is 2D or higher-D: impossible
-            throw std::invalid_argument("L must be a 0- or 1-dimensional.");
-        }
-        else if (l.size() == 0) {                       // no system size: impossible
-            throw std::invalid_argument("System size cannot be empty.");
-        }
-        else if (l.size() == 1) {                       // system size is the same for both dimensions
-            if (l.ndim() == 0) {
-                return std::vector<double>({l(), l()});
-            }
-            else {  // l.ndim() == 1
-                return std::vector<double>({l(0), l(0)});
-            }
-        }
-        else {                                          // system size is different for the two dimensions
-            return std::vector<double>({l(0), l(1)});
-        }
-    }();
+    std::vector<double> const systemSize = _get2DL(L);
 
     // system area (for normalisation)
     double const area = [&systemSize]() {
@@ -92,11 +205,11 @@ Return 2D radial correlations of `values1' and `values2' (1D or 2D).
     auto r = positions.unchecked<2>();                  // direct access to positions
     auto v1 = values1.unchecked<>();                    // direct access to first values
     auto v2 = values2.unchecked<>();                    // direct access to second values
-    if ( v1.shape(0) != r.shape(0) ||
-        v1.shape(0) != v2.shape(0) || v1.size() != v2.size() ) {
+    if (v1.shape(0) != r.shape(0) ||
+        v1.shape(0) != v2.shape(0) || v1.size() != v2.size()) {
         throw std::invalid_argument("Values' sizes are not consistent.");
     }
-    if ( v1.ndim() > 2 || v2.ndim() > 2 ) {
+    if (v1.ndim() > 2 || v2.ndim() > 2) {
         throw std::invalid_argument("Values must be 1- or 2-dimensional.");
     }
     bool const values_is_1D = (v1.ndim() == 1);
@@ -108,7 +221,7 @@ Return 2D radial correlations of `values1' and `values2' (1D or 2D).
     double dist;
     for (int i=0; i < r.shape(0); i++) {
         for (int j=i; j < r.shape(0); j++) {
-            if ( i != j ) { nPairs++; }
+            if (i != j) { nPairs++; }
             disp = {r(j, 0) - r(i, 0), r(j, 1) - r(i, 1)};                  // difference vector
             if (periodic_boundary_conditions) {
                 for (int dim=0; dim < 2; dim++) {
@@ -136,12 +249,12 @@ Return 2D radial correlations of `values1' and `values2' (1D or 2D).
 
     // normalise
     for (int bin=0; bin < nBins; bin++) {
-        if ( occupancy[bin] > 0 ) {
+        if (occupancy[bin] > 0) {
             // mean over computed values
             c(bin, 1) /= occupancy[bin];
             // correction by pair distribution function
-            if ( !rescale_pair_distribution ) { continue; }
-            if ( bin == 0 && rmin == 0 ) { continue; }      // do not consider 0th bin
+            if (!rescale_pair_distribution) { continue; }
+            if (bin == 0 && rmin == 0) { continue; }      // do not consider 0th bin
             c(bin, 1) /=
                 ((double) occupancy[bin]/nPairs)            // histogram value
                 *area/((rmax - rmin)/nBins)                 // normalisation
@@ -220,7 +333,64 @@ Compute histogram with linearly spaced bins.
 
 PYBIND11_MODULE(bind, m) {
 
-    m.def("get2DRadialCorrelations", &get2DRadialCorrelations,
+    m.def("getWaveVectors2D", &getWaveVectors2D,
+        "Return wave vectors associated to rectangular box.\n"
+        "\n"
+        "Parameters\n"
+        "----------\n"
+        "L : float or (1,)- or (2,) float array-like\n"
+        "    Size of the box.\n"
+        "q : float\n"
+        "    Target wave vector norm.\n"
+        "dq : float\n"
+        "    Width of wave vector norm interval. (default: 0.1)\n"
+        "\n"
+        "Returns\n"
+        "-------\n"
+        "wv : (*, 2) float numpy array\n"
+        "    Array of (2\\pi/L nx, 2\\pi/L ny) wave vectors corresponding to\n"
+        "    to the target interval [`q' - `dq'/2, `q' + `dq'/2].\n"
+        "    NOTE: Only a single vector of each pair of opposite wave\n"
+        "          vectors is returned. Here it is chosen such that ny >= 0.",
+        pybind11::arg("L"),
+        pybind11::arg("q"),
+        pybind11::arg("dq")=0.1);
+
+    m.def("getFT2D", &getFT2D,
+        "Return 2D Fourier transform of delta-peaked values.\n"
+        "\n"
+        ".. math::"
+        "V(k_l) = \\sum_i \\exp(-1i k_l \\cdot r_i) v_i\n"
+        "\n"
+        "Parameters\n"
+        "----------\n"
+        "positions : (*, 2) float array-like\n"
+        "    Positions r_i of delta-peaked values.\n"
+        "L : float or (1,)- or (2,) float array-like\n"
+        "    Size of the box.\n"
+        "values : (*,) complex array-like\n"
+        "    Delta-peaked values v_i.\n"
+        "q : float\n"
+        "    Target wave vector norm.\n"
+        "dq : float\n"
+        "    Width of wave vector norm interval. (default: 0.1)\n"
+        "\n"
+        "Returns\n"
+        "-------\n"
+        "qARR : (**, 2) double numpy array\n"
+        "    Array of wave vectors in the target norm interval\n"
+        "    [`q' - `dq'/2, `q' + `dq'/2] for which the Fourier transforms\n"
+        "    are computed.\n"
+        "    NOTE: These are given by getWaveVectors2D.\n"
+        "ft : (**,) complex numpy array\n"
+        "    Fourier transform of `values' for each wave vector.",
+        pybind11::arg("positions"),
+        pybind11::arg("L"),
+        pybind11::arg("values"),
+        pybind11::arg("q"),
+        pybind11::arg("dq")=0.1);
+
+    m.def("getRadialCorrelations2D", &getRadialCorrelations2D,
         "Compute two-dimensional (2D) radial correlations between `values1'\n"
         "(and `values2') associated to each of the positions of a 2D system\n"
         "with linear size(s) `L'.\n"
