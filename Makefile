@@ -21,7 +21,7 @@ PYTHONFLAGS=$(shell $(PYTHON) -m pybind11 --includes) $(shell $(PYTHON)-config -
 all: bind.so
 
 clean:
-	rm -rf *.o *.so *.d
+	rm -rf *.o *.so
 
 # LIBRARIES
 
