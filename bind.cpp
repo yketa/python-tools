@@ -102,7 +102,7 @@ Only a single vector of each pair of opposite wave vectors is returned.
     return arr;
 }
 
-pybind11::tuple getFT2D(
+pybind11::array_t<std::complex<double>> getFT2D(
     pybind11::array_t<double> const& positions,
     pybind11::array_t<double> const& L,
     pybind11::array_t<std::complex<double>> const& values,
@@ -114,6 +114,8 @@ vectors `q'.
 
     // wave vector norms
     pybind11::array_t<double> qARR = getWaveVectors2D(L, q, dq);
+    if (qARR.request().size == 0)
+        { return pybind11::array_t<std::complex<double>>(0); }
     auto _q = qARR.unchecked<2>();      // direct access to wave vectors
     long int const n = _q.shape(0);
 
@@ -140,7 +142,7 @@ vectors `q'.
         }
     }
 
-    return pybind11::make_tuple(qARR, ft);
+    return ft;
 }
 
 /*
@@ -377,13 +379,10 @@ PYBIND11_MODULE(bind, m) {
         "\n"
         "Returns\n"
         "-------\n"
-        "qARR : (**, 2) double numpy array\n"
-        "    Array of wave vectors in the target norm interval\n"
-        "    [`q' - `dq'/2, `q' + `dq'/2] for which the Fourier transforms\n"
-        "    are computed.\n"
-        "    NOTE: These are given by getWaveVectors2D.\n"
         "ft : (**,) complex numpy array\n"
-        "    Fourier transform of `values' for each wave vector.",
+        "    Fourier transform of `values' for each wave vector in the\n"
+        "    target  norm interval [`q' - `dq'/2, `q' + `dq'/2].\n"
+        "    NOTE: These are given by getWaveVectors2D.\n",
         pybind11::arg("positions"),
         pybind11::arg("L"),
         pybind11::arg("values"),
