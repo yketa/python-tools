@@ -3,11 +3,12 @@ Algorithmic and mathematical python tools.
 """
 
 import numpy as np
+import math
 
 # https://stackoverflow.com/questions/16981921/relative-imports-in-python-3
-import sys
-import os
-sys.path.append(os.path.dirname(os.path.abspath(__file__)))
+# https://stackoverflow.com/questions/3220755/how-to-find-the-target-files-fullabsolute-path-of-the-symbolic-link-or-soft-l
+import sys, os
+sys.path.append(os.path.dirname(os.path.realpath(__file__)))
 from bind import getHistogram, getHistogramLinear
 
 #####################
@@ -163,6 +164,28 @@ class MultiIntKeyDict(object):
         uniqueIndex = self._keys[existingKey]
         for newKey in newKeys:
             self._keys[newKey] = uniqueIndex
+
+def progressbar(p, width=40):
+    """
+    Display progress bar. (https://stackoverflow.com/a/3160819/7385044)
+
+    Parameters
+    ----------
+    p : float
+        Status of the bar (between 0 and 1).
+        NOTE: if p == 1 then the progress bar is ended.
+    width : int
+        Width of the progress bar in number of characters. (default: 40)
+    """
+
+    out = "[%s] (%2i%%) " % (
+        "="*math.ceil(p*width)
+            + " "*(width - math.ceil(p*width)),
+        math.ceil(100*p))
+    sys.stderr.write(out)
+    sys.stderr.flush()
+    sys.stderr.write("\b"*len(out))
+    if p == 1: sys.stderr.write("\n")   # end the progress bar
 
 #####################
 ### DISTRIBUTIONS ###
