@@ -33,7 +33,7 @@ clean:
 
 # LIBRARIES
 
-bind.so: CFLAGS+=-fPIC $(PYTHONFLAGS)
-bind.so: bind.cpp
+%.so: CFLAGS+=-fPIC $(PYTHONFLAGS)
+%.so: %.cpp
 	$(CXX) -o $@ -shared $^ $(CFLAGS) $(LDFLAGS)
 
