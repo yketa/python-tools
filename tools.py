@@ -87,8 +87,8 @@ class MultiIntKeyDict(object):
         Initialises with (possibly empty) dictionary.
         """
 
-        self._keys = {}	# secondary dictionary which associates multiple keys to an unique key of self._data
-        self._data = {}	# values with unique identification
+        self._keys = {} # secondary dictionary which associates multiple keys to an unique key of self._data
+        self._data = {} # values with unique identification
 
         for k, v in kwargs.items():
             self[k] = v
@@ -583,4 +583,107 @@ class Histogram3D:
         if np.sum(self.hist[:, 2]) > 0: # there are binned values
             self.hist[:, 2] /= np.sum(self.hist[:, 2])
         return self.hist
+
+#################
+### ENVELOPES ###
+#################
+
+def hl_envelopes_idx(s, dmin=1, dmax=1, split=False):
+    """
+    Compute high and low envelopes of a signal `s'.
+
+    https://stackoverflow.com/questions/34235530/how-to-get-high-and-low-envelope-of-a-signal
+
+    Parameters
+    ----------
+    s : (*,) array-like
+        Data signal from which to extract high and low envelopes.
+    dmin : int
+        Minimum size of chunks. Use this if the size of the input signal is too
+        big. (default: 1)
+    dmax : int
+        Maximum size of chunks. Use this if the size of the input signal is too
+        big. (default: 1)
+    split: bool
+        Split the signal in half along its mean, might help to generate the
+        envelope in some cases. (default: False)
+
+    Returns
+    -------
+    lmin : (**,) numpy int array
+        Indices of the data point forming the low envelope of the signal.
+    lmax : (***,) numpy int array
+        Indices of the data point forming the high envelope of the signal.
+    """
+
+    # locals min
+    lmin = (np.diff(np.sign(np.diff(s))) > 0).nonzero()[0] + 1
+    # locals max
+    lmax = (np.diff(np.sign(np.diff(s))) < 0).nonzero()[0] + 1
+
+    if split:
+        # s_mid is zero if s centered around x-axis or more generally mean of signal
+        s_mid = np.mean(s)
+        # pre-sorting of locals min based on relative position with respect to s_mid
+        lmin = lmin[s[lmin]<s_mid]
+        # pre-sorting of local max based on relative position with respect to s_mid
+        lmax = lmax[s[lmax]>s_mid]
+
+    # global max of dmax-chunks of locals max
+    lmin = lmin[[i + np.argmin(s[lmin[i:i + dmin]])
+        for i in range(0, len(lmin), dmin)]]
+    # global min of dmin-chunks of locals min
+    lmax = lmax[[i + np.argmax(s[lmax[i:i + dmax]])
+        for i in range(0, len(lmax), dmax)]]
+
+    return lmin, lmax
+
+def hl_envelopes(x, y, dmin=1, dmax=1, split=False):
+    """
+    Compute interpolation for low and high envelopes of `y(x)' (see
+    hl_envelopes_idx).
+
+    https://stackoverflow.com/questions/63541222/fill-between-two-lines-lacking-common-x-values
+
+    Parameters
+    ----------
+    x : (*,) array-like
+        x-axis data of signal from which to extract high and low envelopes.
+    y : (*,) array-like
+        y-axis data of signal from which to extract high and low envelopes.
+    dmin : int
+        Minimum size of chunks. Use this if the size of the input signal is too
+        big. (default: 1)
+    dmax : int
+        Maximum size of chunks. Use this if the size of the input signal is too
+        big. (default: 1)
+    split: bool
+        Split the signal in half along its mean, might help to generate the
+        envelope in some cases. (default: False)
+
+    Returns
+    -------
+    newx : (**,) numpy float array
+        x-axis data of interpolated signal.
+    ymin : (**,) numpy float array
+        y-axis data of low envelope of interpolated signal.
+    ymax : (**,) numpy float array
+        y-axis data of high envelope of interpolated signal.
+    """
+
+    x, y = np.array(x), np.array(y)
+    assert x.ndim == y.ndim == 1
+    assert x.size == y.size
+
+    # low and high envelopes
+    lmin, lmax = hl_envelopes_idx(y)
+    xmin, ymin = x[lmin], y[lmin]
+    xmax, ymax = x[lmax], y[lmax]
+
+    # interpolation
+    newx = np.sort(np.concatenate([xmin, xmax]))
+    ymin = np.interp(newx, xmin, ymin)
+    ymax = np.interp(newx, xmax, ymax)
+
+    return newx, ymin, ymax
 
