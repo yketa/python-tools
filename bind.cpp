@@ -45,6 +45,67 @@ array of double.
     }
 }
 
+pybind11::array_t<double> gaussian_smooth_1d(
+    pybind11::array_t<double> const& X, pybind11::array_t<double> const& Y,
+    double const& sigma, long int const& n, pybind11::args const& args) {
+/*
+Gaussian smoothing of a curve `Y(X)' with kernel standard deviation `sigma'.
+*/
+
+    auto x = X.unchecked<1>();
+    auto y = Y.unchecked<1>();
+
+    // check x and y are the same size
+    assert(x.ndim() == y.ndim() && x.ndim() == 1);
+    assert(x.size() == y.size());
+    long int const N = x.size();
+    // check X is ordered
+    for (long int i=0; i < (long int) x.size() - 1; i++)
+        { assert(x(i) < x(i + 1)); }
+    // check n is in {0, 1, 2}
+    assert(n == 0 || n == 1 || n == 2);
+
+    std::vector<double> out_x(0);                               // x-data at which to smooth function
+    if (args.size() == 0) {                                     // use input x-data
+        for (long int i=0; i < (long int) x.size(); i++)
+            { out_x.push_back(x(i)); }
+    }
+    else {                                                      // use user-defined x-data
+        for (long int i=0; i < (long int) args.size(); i++)
+            { out_x.push_back(args[i].cast<double>()); }
+    }
+    pybind11::array_t<double> out_Y((long int) out_x.size());   // smoothed y-data
+    auto out_y = out_Y.mutable_unchecked<1>();
+    for (long int i=0; i < (long int) out_y.size(); i++) { out_y(i) = 0; }
+
+    auto kernel = [&sigma, &n](double const& x) // kernel function
+        { return exp(-pow(x/sigma, 2)/2); };
+
+    for (long int i=0; i < (long int) y.size(); i++) {
+        double const norm =                     // normalise to conserve integral on [min(X), max(X)]
+            // part from the integral of the kernel
+            sqrt(std::numbers::pi/2)*sigma*(
+                erf((x(N - 1) - x(i))/(sqrt(2)*sigma))
+                    - erf((x(0) - x(i))/(sqrt(2)*sigma)))
+            // part from the Riemann sum
+                        *2/(i == 0 ?
+                            x(1) - x(0) :
+                            (i == N - 1 ?
+                                x(N - 1) - x(N - 2) :
+                                x(i + 1) - x(i - 1)));
+        for (long int j=0; j < (long int) out_x.size(); j++) {
+            out_y(j) += kernel(out_x[j] - x(i))*y(i)/norm*(
+                n == 0 ?
+                    1 :
+                    pow(sigma, -2)*(n == 1 ?
+                        -(out_x[j] - x(i)) :
+                        pow((out_x[j] - x(i))/sigma, 2) - 1));
+        }
+    }
+
+    return out_Y;
+}
+
 /*
  *  Fourier transforms
  *
@@ -334,6 +395,35 @@ Compute histogram with linearly spaced bins.
  */
 
 PYBIND11_MODULE(bind, m) {
+
+    m.def("gaussian_smooth_1d", &gaussian_smooth_1d,
+        "From y-coordinates Y at corresponding x-coordinates X, returns\n"
+        "smoothed y-coordinates with smoothing function exp(-(x/sigma)^2) at\n"
+        "x-coordinates."
+        "\n"
+        "Parameters\n"
+        "----------\n"
+        "X : (*,) float array-like\n"
+        "    Input x-coordinates.\n"
+        "Y : (*,) float array-like\n"
+        "    Input y-coordinates.\n"
+        "sigma : float\n"
+        "    Smoothing length scale.\n"
+        "n : 0, 1, or 2\n"
+        "    Derivative order.\n"
+        "x : float\n"
+        "    Output x-coordinates.\n"
+        "    NOTE: if no x is passed, then smoothed y-coordinates are\n"
+        "          returned at X.\n"
+        "\n"
+        "Returns\n"
+        "-------\n"
+        "smoothedY : (len(x),) or (*,) float numpy array\n"
+        "    Smoothed y-coordinates.\n",
+        pybind11::arg("X"),
+        pybind11::arg("Y"),
+        pybind11::arg("sigma"),
+        pybind11::arg("n"));
 
     m.def("getWaveVectors2D", &getWaveVectors2D,
         "Return wave vectors associated to rectangular box.\n"
