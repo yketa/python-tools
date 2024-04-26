@@ -21,8 +21,8 @@ import seaborn as sns
 
 _markers = (                        # default markers list
     # mpl.markers.MarkerStyle.filled_markers)
-    'o', '^', 's', '*', 'X', 'D', '8', 'v', '<', '>', 'h', 'H', 'p', 'd', 'P')
-if mpl.__version__ >= '3':
+    "o", "^", "s", "*", "X", "D", "8", "v", "<", ">", "h", "H", "p", "d", "P")
+if mpl.__version__ >= "3":
     _linestyles = (
         (0, ()),                    # solid
         (0, (5, 1)),                # densely dashed
@@ -40,10 +40,10 @@ if mpl.__version__ >= '3':
         )
 else:
     _linestyles = (
-        '-',    # solid
-        '--',   # dashed
-        '-.',   # dash-dotted
-        ':'     # dotted
+        "-",    # solid
+        "--",   # dashed
+        "-.",   # dash-dotted
+        ":"     # dotted
         )
 
 # FUNCTIONS AND CLASSES
@@ -58,9 +58,9 @@ def set_font_size(font_size):
         Font size.
     """
 
-    mpl.rcParams.update({'font.size': font_size})
+    mpl.rcParams.update({"font.size": font_size})
 
-def list_colormap(value_list, colormap='colorblind', sort=True):
+def list_colormap(value_list, colormap="colorblind", sort=True):
     """
     Creates hash table of colors from colormap, defined according to value_list
     index, with value_list elements as keys.
@@ -70,7 +70,7 @@ def list_colormap(value_list, colormap='colorblind', sort=True):
     value_list : list
         List of values.
     colormap : matplotlib colormap or seaborn color palette
-        Colormap or color palette to use. (default: 'colorblind')
+        Colormap or color palette to use. (default: "colorblind")
     sort : bool
         Sort list of values before assigning colors. (default: True)
 
@@ -83,7 +83,7 @@ def list_colormap(value_list, colormap='colorblind', sort=True):
     value_list = list(OrderedDict.fromkeys(value_list))
     if sort: value_list = sorted(value_list)
 
-    try:    # matplotlib colormap
+    try:                # matplotlib colormap
 
         cmap = plt.get_cmap(colormap)                               # colormap
         norm = colors.Normalize(vmin=0, vmax=len(value_list) + 1)   # normalise colormap according to list index
@@ -153,7 +153,8 @@ def list_linestyles(value_list, linestyle_list=_linestyles, sort=True):
         for index in range(len(value_list))}
 
 def contours(x, y, z, vmin=None, vmax=None, contours=20, cmap=plt.cm.jet,
-        colorbar_position='right', colorbar_orientation='vertical'):
+    colorbar_position="right", colorbar_orientation="vertical",
+    logx=False, logy=False, logz=False):
     """
     Plot contours from 3D data.
 
@@ -177,9 +178,15 @@ def contours(x, y, z, vmin=None, vmax=None, contours=20, cmap=plt.cm.jet,
     cmap : matplotlib colorbar
         Matplotlib colorbar to be used. (default: matplotlib.pyplot.cm.jet)
     colorbar_position : string
-        Position of colorbar relative to axis. (default: 'right')
+        Position of colorbar relative to axis. (default: "right")
     colorbar_orientation : string
-        Orientation of colorbar. (default: 'vertical')
+        Orientation of colorbar. (default: "vertical")
+    logx : bool
+        Logarithmically spaced x-axis data. (default: False)
+    logy : bool
+        Logarithmically spaced y-axis data. (default: False)
+    logz : bool
+        Logarithmically spaced z-axis data. (default: False)
 
     Returns
     -------
@@ -199,14 +206,14 @@ def contours(x, y, z, vmin=None, vmax=None, contours=20, cmap=plt.cm.jet,
     z = np.array(z, dtype=float)
     assert z.shape == y.shape
 
-    vmin = vmin if vmin != None else z[~np.isnan(z)].min()
-    vmax = vmax if vmax != None else z[~np.isnan(z)].max()
+    vmin = vmin if not(vmin is None) else z[~np.isnan(z)].min()
+    vmax = vmax if not(vmax is None) else z[~np.isnan(z)].max()
     norm = colors.Normalize(vmin=vmin, vmax=vmax)
     scalarMap = cmx.ScalarMappable(norm=norm, cmap=cmap)
 
     fig, ax = plt.subplots()
     divider = make_axes_locatable(ax)
-    cax = divider.append_axes(colorbar_position, size='5%', pad=0.05)
+    cax = divider.append_axes(colorbar_position, size="5%", pad=0.05)
     colorbar = mpl.colorbar.ColorbarBase(cax, cmap=cmap, norm=norm,
         orientation=colorbar_orientation)
 
@@ -223,34 +230,34 @@ class FittingLine:
     """
     Provided a matplotlib.axes.Axes object, this object:
     > draws a staight line on the corresponding figure, either in a log-log
-    (powerlaw fit) or in a lin-log (exponential fit) plot,
+    (powerlaw fit), lin-log (exponential fit), log-lin (logarithmic fit), or a
+    lin-lin (linear fit) plot,
     > displays underneath the figure a slider which controls the slope of the
     line, the slider can be hidden / shown by scrolling,
-    > enables switching between powerlaw and exponential fit at double click,
     > shows fitting line expression in legend.
 
     Clicking on the figure updates the position of the line such that it passes
     through the clicked point.
 
-    Instances
-    ---------
+    Attributes (partial list)
+    ----------
 
     FittingLine.ax : matplotlib.axes.Axes object
         Plot Axes object.
 
     FittingLine.x_fit : string
-        x data name in legend.
+        x-data name in legend.
     FittingLine.y_fit : string
-        y data name in legend.
+        y-data name in legend.
     FittingLine.color : any matplotlib color
         Color of fitting line.
     FittingLine.linestyle : any matplotlib linestyle
-        linestyle of fitting line
+        Linestyle of fitting line.
 
     FittingLine.x0 : float
-        x coordinate of clicked point
+        x-coordinate of clicked point.
     FittingLine.y0 : float
-        y coordinate of clicked point
+        y-coordinate of clicked point.
     FittingLine.slope : float
         Slope of fitting line.
 
@@ -260,15 +267,15 @@ class FittingLine:
     FittingLine.slider : matplotlib Slider widget
         Slope slider.
 
-    FittingLine.law : string (either 'Powerlaw' or 'Exponential')
+    FittingLine.law : string
         Fitting line law.
-    FittingLine.func : function (either Powerlaw or Exponential)
+    FittingLine.func : function
         Fitting line function.
     """
 
     def __init__(self, ax, slope, slope_min=None, slope_max=None,
-        color='black', linestyle='--', slider=True,
-        legend=False, exp_format='{:.2e}', font_size=None,
+        color="black", linestyle="--", slider=True, output=True,
+        legend=False, exp_format="{:.2e}", font_size=None,
         legend_frame=False, handlelength=None, **kwargs):
         """
         Parameters
@@ -278,39 +285,32 @@ class FittingLine:
         slope : float
             Initial slope of fitting line in log-log plot.
         slope_min : float
-            Minimum slope of fitting line for slider.
-            NOTE: if slope_min=None, then slope_min is taken to be slope.
-            DEFAULT: None
+            Minimum slope of fitting line for slider. (default: None)
+            NOTE: if slope_min == None, then slope_min is taken to be slope.
         slope_max : float
-            Maximum slope of fitting line for slider.
-            NOTE: if slope_max=None, then slope_max is taken to be slope.
-            DEFAULT: None
+            Maximum slope of fitting line for slider. (default: None)
+            NOTE: if slope_max == None, then slope_max is taken to be slope.
         color : any matplotlib color
-            Color of fitting line.
-            DEFAULT: black
+            Color of fitting line. (default: "black")
         linestyle : any matplotlib line style
-            Line style of fitting line.
-            DEFAULT: --
+            Line style of fitting line. (default: "--")
         slider : bool
-            Display slider for slope.
-            DEFAULT: True
+            Display slider for slope. (default: True)
+        output : bool
+            Print coordinates of clicked point and slope at each update.
+            (default: True)
         legend : bool
-            Display legend.
-            DEFAULT: True
+            Display legend. (default: True)
         exp_format : string
-            Exponent string format in legend.
-            NOTE: Only if legend=True.
-            DEFAULT: {:.2e}
+            Exponent string format in legend. (default: {:.2e})
+            NOTE: Only if legend == True.
         font_size : float
-            Legend font size.
-            NOTE: if font_size=None, the font size is not imposed.
-            DEFAULT: None
+            Legend font size. (default: None)
+            NOTE: if font_size == None, the font size is not imposed.
         legend_frame : bool
-            Display legend frame.
-            DEFAULT: True
+            Display legend frame. (default: True)
         handlelength : float
-            Horizontal line length in legend.
-            DEFAULT: None
+            Horizontal line length in legend. (default: None)
 
         Optional keyword arguments
         --------------------------
@@ -320,61 +320,88 @@ class FittingLine:
             Custom name of y data for fitting line expression in legend.
         """
 
-        self.ax = ax                # Axes object
-        plt.sca(self.ax)            # set current axis
-        self.ax.set_yscale('log')   # setting y-axis on logarithmic scale
+        self.ax = ax        # Axes object
+        plt.sca(self.ax)    # set current axis
 
-        self.x_fit = (kwargs['x_fit'] if 'x_fit' in kwargs
-            else self.ax.get_xlabel()).replace('$', '') # x data name in legend
-        self.y_fit = (kwargs['y_fit'] if 'y_fit' in kwargs
-            else self.ax.get_ylabel()).replace('$', '') # y data name in legend
+        self.x_fit = (kwargs["x_fit"] if "x_fit" in kwargs
+            else self.ax.get_xlabel()).replace("$", "") # x data name in legend
+        self.y_fit = (kwargs["y_fit"] if "y_fit" in kwargs
+            else self.ax.get_ylabel()).replace("$", "") # y data name in legend
         self.color = color                              # color of fitting line
         self.linestyle = linestyle                      # linestyle of fitting line
 
-        self.x0 = np.exp(np.ma.log(self.ax.get_xlim()).mean())  # x coordinate of clicked point
-        self.y0 = np.exp(np.ma.log(self.ax.get_ylim()).mean())  # y coordinate of clicked point
-        self.slope = slope                                      # slope of fitting line
+        self.slope = slope  # slope of fitting line
 
-        self.line, = self.ax.plot([], [], label=' ',
+        self.ax.set_xlim(self.ax.get_xlim())
+        self.ax.set_ylim(self.ax.get_ylim())
+        xscale, yscale = self.ax.get_xscale(), self.ax.get_yscale()
+        self.x0 = ( # x-coordinate of clicked point set as middle of graph
+            np.exp(np.ma.log(self.ax.get_xlim()).mean()) if xscale == "log"
+            else np.mean(self.ax.get_xlim()))
+        self.y0 = ( # y-coordinate of clicked point set as middle of graph
+            np.exp(np.ma.log(self.ax.get_ylim()).mean()) if yscale == "log"
+            else np.mean(self.ax.get_ylim()))
+        if xscale == "log" and yscale == "log":
+            self.law = "powerlaw"
+            self.func = _powerlaw
+            self.label = r"$%s \propto %s^{%s}$"
+        elif xscale == "linear" and yscale == "log":
+            self.law == "exponential"
+            self.func = _exponential
+            self.label = r"$%s \propto e^{%s%s}$"
+        elif xscale == "log" and yscale == "linear":
+            self.law = "logarithmic"
+            self.func = _logarithmic
+            self.label = r"$%s \propto %s\log(%s)$"
+        elif xscale == "linear" and yscale == "linear":
+            self.law = "linear"
+            self.func = _linear
+            self.label = r"$%s \propto %s%s$"
+        else:
+            raise ValueError("Axis scales are not supported.")
+
+        self.line, = self.ax.plot([], [], label=" ",
             color=self.color, linestyle=self.linestyle) # Line2D representing fitting line
 
         self.display_legend = legend                                # display legend
         if self.display_legend:
-            self.x_legend = np.mean(self.ax.get_xlim())             # x coordinate of fitting line legend
-            self.y_legend = np.mean(self.ax.get_ylim())             # y coordinate of fitting line legend
+            self.x_legend = self.x0                                 # x-coordinate of fitting line legend
+            self.y_legend = self.y0                                 # y-coordinate of fitting line legend
             self.legend = plt.legend(handles=[self.line], loc=10,
                 bbox_to_anchor=(self.x_legend, self.y_legend),
                 bbox_transform=self.ax.transData,
                 frameon=legend_frame, handlelength=handlelength)    # fitting line legend
-            self.set_fontsize(font_size)                            # set legend font size
+            self._set_fontsize(font_size)                           # set legend font size
             self.legend_artist = self.ax.add_artist(self.legend)    # fitting line legend artist object
             self.legend_artist.set_picker(10)                       # epsilon tolerance in points to fire pick event
         self.on_legend = False                                      # has the mouse been clicked on fitting line legend
         self.exp_format = exp_format                                # exponent string format in legend
 
         self.display_slider = slider                    # display slider
+        if slope_min is None and slope_max is None: self.display_slider = False
         if self.display_slider:
             self.slider_ax = make_axes_locatable(self.ax).append_axes(
-                'bottom', size='5%', pad=0.6)           # slider Axes
-            self.slider = Slider(self.slider_ax, 'slope',
-                slope_min if slope_min != None else slope,
-                slope_max if slope_max != None else slope,
-                valinit=slope, color='#e85e8a')         # slider
+                "bottom", size="5%", pad=0.6)           # slider Axes
+            self.slider = Slider(self.slider_ax, "slope",
+                slope_min if not(slope_min is None) else slope,
+                slope_max if not(slope_max is None) else slope,
+                valinit=slope, color="#e85e8a")         # slider
             self.slider.on_changed(self.update_slope)   # call self.update_slope when slider value is changed
 
-        self.law = 'exponential'    # fitting line law
-        self.update_law()           # initialises fitting line function, updates figure and sets legend
+        self.output = output    # print (x0, y0) and slope at each update
 
         self.cid_click = self.line.figure.canvas.mpl_connect(
-            'button_press_event', self.on_click)        # call on click on figure
+            "button_press_event", self._on_click)       # call on click on figure
         self.cid_pick = self.line.figure.canvas.mpl_connect(
-            'pick_event', self.on_pick)                 # call on artist pick on figure
+            "pick_event", self._on_pick)                # call on artist pick on figure
         self.cid_release = self.line.figure.canvas.mpl_connect(
-            'button_release_event', self.on_release)    # call on release on figure
+            "button_release_event", self._on_release)   # call on release on figure
         self.cid_scroll = self.line.figure.canvas.mpl_connect(
-            'scroll_event', self.on_scroll)             # call on scroll
+            "scroll_event", self._on_scroll)            # call on scroll
 
-    def set_fontsize(self, font_size):
+        self.update_slope() # draw everything
+
+    def _set_fontsize(self, font_size):
         """
         Set legend font size.
 
@@ -386,10 +413,10 @@ class FittingLine:
         """
 
         self.font_size = font_size
-        if self.font_size != None:
+        if not(self.font_size is None):
             self.legend.get_texts()[0].set_fontsize(self.font_size) # set legend font size
 
-    def on_click(self, event):
+    def _on_click(self, event):
         """
         Executes on click.
 
@@ -399,21 +426,18 @@ class FittingLine:
         figure.
         """
 
-        if event.inaxes != self.ax:   # if Axes instance mouse is over is different than figure Axes
+        if event.inaxes != self.ax: # if Axes instance mouse is over is different than figure Axes
             return
 
-        elif self.on_legend:    # if fitting line legend is being dragged
+        elif self.on_legend:        # if fitting line legend is being dragged
             return
-
-        elif event.dblclick:    # if event is a double click
-            self.update_law()   # update fitting line law (and update figure)
 
         else:
             self.x0 = event.xdata   # x coordinate of clicked point
             self.y0 = event.ydata   # y coordinate of clicked point
             self.draw()             # update figure
 
-    def on_pick(self, event):
+    def _on_pick(self, event):
         """
         Executes on picking.
 
@@ -425,7 +449,7 @@ class FittingLine:
         if event.artist == self.legend_artist:  # if fitting line legend is clicked
             self.on_legend = True               # fitting line legend has been clicked
 
-    def on_release(self, event):
+    def _on_release(self, event):
         """
         Executes on release.
 
@@ -442,7 +466,7 @@ class FittingLine:
         self.line.figure.canvas.draw()      # updates legend
         self.on_legend = False              # fitting line legend has been released
 
-    def on_scroll(self, event):
+    def _on_scroll(self, event):
         """
         Executes on scroll.
 
@@ -451,39 +475,31 @@ class FittingLine:
 
         if not(self.display_slider): return
 
-        self.slider_ax.set_visible(self.slider_ax.get_visible() == False)   # hide or show slider Axes
-        self.line.figure.canvas.draw()                                      # updates figure
+        self.slider_ax.set_visible(not(self.slider_ax.get_visible()))   # hide or show slider Axes
+        self.line.figure.canvas.draw()                                  # updates figure
 
-    def update_slope(self, val):
+    def update_slope(self, val=None):
         """
         Set fitting line slope according to slider value and updates figure.
         """
 
-        self.slope = self.slider.val    # updates slope of fitting line
-        self.update_legend()            # updates legend and figure
-
-    def update_law(self):
-        """
-        Switches between powerlaw and exponential laws and updates figure.
-        """
-
-        self.law = ['powerlaw', 'exponential'][self.law == 'powerlaw']  # switches between powerlaw and exponential
-        self.func = {'powerlaw': _powerlaw,
-            'exponential': _exponential}[self.law]                      # fitting line function
-        self.ax.set_xscale(['linear', 'log'][self.law == 'powerlaw'])   # set x-axis scale according to fitting law
-        self.update_legend()                                            # updates legend and figure
+        if self.display_slider: self.slope = self.slider.val    # updates slope of fitting line
+        self.update_legend()                                    # updates legend and figure
 
     def update_legend(self):
         """
         Updates fitting line legend.
         """
 
-        if self.law == 'powerlaw':
-            self.line.set_label(r'$%s \propto %s^{%s}$' % (self.y_fit,
+        if self.law == "powerlaw":
+            self.line.set_label(r"$%s \propto %s^{%s}$" % (self.y_fit,
                 self.x_fit, self.exp_format.format(self.slope)))    # fitting line label
-        elif self.law == 'exponential':
-            self.line.set_label(r'$%s \propto e^{%s%s}$' % (self.y_fit,
+        elif self.law == "exponential":
+            self.line.set_label(r"$%s \propto e^{%s%s}$" % (self.y_fit,
                 self.exp_format.format(self.slope), self.x_fit))    # fitting line label
+
+        self.line.set_label(self.label                                  # fitting line label
+            % (self.y_fit, self.exp_format.format(self.slope), self.x_fit))
 
         if self.display_legend == True:
             self.legend.get_texts()[0].set_text(self.line.get_label())  # updates fitting line legend
@@ -494,11 +510,14 @@ class FittingLine:
         Updates figure with desired fitting line.
         """
 
+        if self.output:
+            print("x0 = %s; y0 = %s; slope = %s"
+                % (self.x0, self.y0, self.slope))
+
         self.line.set_data(self.ax.get_xlim(), list(map(
             lambda x: self.func(self.x0, self.y0, self.slope, x),
-            self.ax.get_xlim()
-            )))                           # line passes through clicked point according to law
-        self.line.figure.canvas.draw()    # updates figure
+            self.ax.get_xlim())))       # line passes through clicked point according to law
+        self.line.figure.canvas.draw()  # updates figure
 
 def _powerlaw(x0, y0, slope, x):
     """
@@ -533,3 +552,38 @@ def _exponential(x0, y0, slope, x):
     """
 
     return y0 * np.exp((x - x0) * slope)
+
+def _logarithmic(x0, y0, slope, x):
+    """
+    From point (x0, y0) and parameter slope, returns y = f(x) such that:
+    > f(x) = log(x) * slope + a
+    > f(x0) = y0
+
+    Parameters
+    ----------
+    x0, y0, slope, x : float
+
+    Returns
+    -------
+    y = f(x) : float
+    """
+
+    return np.log(x/x0) * slope + y0
+
+def _linear(x0, y0, slope, x):
+    """
+    From point (x0, y0) and parameter slope, returns y = f(x) such that:
+    > f(x) = x * slope + a
+    > f(x0) = y0
+
+    Parameters
+    ----------
+    x0, y0, slope, x : float
+
+    Returns
+    -------
+    y = f(x) : float
+    """
+
+    return (x - x0) * slope + y0
+
