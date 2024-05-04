@@ -9,7 +9,7 @@ import math
 # https://stackoverflow.com/questions/3220755/how-to-find-the-target-files-fullabsolute-path-of-the-symbolic-link-or-soft-l
 import sys, os
 sys.path.append(os.path.dirname(os.path.realpath(__file__)))
-from bind import getHistogram, getHistogramLinear
+from .bind import getHistogram, getHistogramLinear
 
 #####################
 ### MISCELLANEOUS ###
