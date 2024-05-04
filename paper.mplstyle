@@ -463,7 +463,7 @@ keymap.forward : right, v           #   left handed quick navigation
 keymap.pan : p                      # pan mnemonic
 keymap.zoom : o                     # zoom mnemonic
 keymap.save : s, ctrl+s             # saving current figure
-keymap.quit : ctrl+w, cmd+w         # close the current figure
+keymap.quit : ctrl+w, cmd+w, ctrl+d # close the current figure
 keymap.grid : g                     # switching on/off a grid in current axes
 keymap.yscale : l                   # toggle scaling of y-axes ('log'/'linear')
 keymap.xscale : k, L                # toggle scaling of x-axes ('log'/'linear')
