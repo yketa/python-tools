@@ -226,6 +226,34 @@ def contours(x, y, z, vmin=None, vmax=None, contours=20, cmap=plt.cm.jet,
 
     return fig, ax, colorbar
 
+def combine_hex_values(d):
+    """
+    Mix colours.
+    https://stackoverflow.com/questions/61488790/how-can-i-proportionally-mix-colors-in-python
+
+    Parameters
+    ----------
+    d : {colour hex string: float}
+        Colours and their proportion.
+
+    Returns
+    -------
+    colour : colour hex string
+        Mix colour.
+    """
+
+    assert type(d) is dict
+    if len(d) == 0: return
+
+    d_items = sorted(d.items())
+    tot_weight = sum(d.values())
+    red = int(sum([int(k[:2], 16)*v for k, v in d_items])/tot_weight)
+    green = int(sum([int(k[2:4], 16)*v for k, v in d_items])/tot_weight)
+    blue = int(sum([int(k[4:6], 16)*v for k, v in d_items])/tot_weight)
+    zpad = lambda x: x if len(x)==2 else "0" + x
+
+    return zpad(hex(red)[2:]) + zpad(hex(green)[2:]) + zpad(hex(blue)[2:])
+
 class FittingLine:
     """
     Provided a matplotlib.axes.Axes object, this object:
