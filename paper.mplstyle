@@ -205,8 +205,8 @@ axes.formatter.offset_threshold : 2      # When useoffset is True, the offset
 axes.unicode_minus  : True    # use unicode for the minus symbol
                               # rather than hyphen.  See
                               # http://en.wikipedia.org/wiki/Plus_and_minus_signs#Character_codes
-axes.prop_cycle    : cycler('color', 'bgrcmyk')
-                                           # color cycle for plot lines
+axes.prop_cycle    : cycler(color=["#0173b2", "#de8f05", "#029e73", "#d55e00", "#cc78bc", "#ca9161", "#fbafe4", "#949494", "#ece133", "#56b4e9"])
+                                           # color cycle for plot lines from seaborn colorblind palette
                                            # as list of string colorspecs:
                                            # single letter, long name, or
                                            # web-style hex
