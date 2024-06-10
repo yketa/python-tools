@@ -261,7 +261,7 @@ class FittingLine:
     (powerlaw fit), lin-log (exponential fit), log-lin (logarithmic fit), or a
     lin-lin (linear fit) plot,
     > displays underneath the figure a slider which controls the slope of the
-    line, the slider can be hidden / shown by scrolling,
+    line, the slider can be expanded / shrinked by scrolling,
     > shows fitting line expression in legend.
 
     Clicking on the figure updates the position of the line such that it passes
@@ -405,16 +405,20 @@ class FittingLine:
         self.on_legend = False                                      # has the mouse been clicked on fitting line legend
         self.exp_format = exp_format                                # exponent string format in legend
 
-        self.display_slider = slider                    # display slider
+        self.display_slider = slider                        # display slider
         if slope_min is None and slope_max is None: self.display_slider = False
         if self.display_slider:
             self.slider_ax = make_axes_locatable(self.ax).append_axes(
-                "bottom", size="5%", pad=0.6)           # slider Axes
-            self.slider = Slider(self.slider_ax, "slope",
+                "bottom", size="5%", pad=0.6)               # slider Axes
+            self.slider = Slider(self.slider_ax, "",        # slider
                 slope_min if not(slope_min is None) else slope,
                 slope_max if not(slope_max is None) else slope,
-                valinit=slope, color="#e85e8a")         # slider
-            self.slider.on_changed(self.update_slope)   # call self.update_slope when slider value is changed
+                valinit=slope, initcolor='none', color="#e85e8a",
+                valfmt="slope=%.3e")
+            self.slider.on_changed(self.update_slope)       # call self.update_slope when slider value is changed
+            self.slider.valtext.set_position((0.5, -0.75))  # centre value below slider
+            self.slider.valtext.set_verticalalignment("center")
+            self.slider.valtext.set_horizontalalignment("center")
 
         self.output = output    # print (x0, y0) and slope at each update
 
@@ -498,13 +502,36 @@ class FittingLine:
         """
         Executes on scroll.
 
-        Hide slider if slider is visible, and vice versa.
+        Expand/shrink slider if slider is visible.
         """
 
         if not(self.display_slider): return
 
-        self.slider_ax.set_visible(not(self.slider_ax.get_visible()))   # hide or show slider Axes
-        self.line.figure.canvas.draw()                                  # updates figure
+        dilation = 0.1                                          # dilation parameter
+        factor = 1 + dilation*(1 if event.button == "up" else -1)
+
+        middle = (self.slider.valmin + self.slider.valmax)/2    # dilate with respect to middle
+        vmin = middle - (middle - self.slider.valmin)*factor
+        self.slider.valmin = vmin
+        vmax = middle - (middle - self.slider.valmax)*factor
+        self.slider.valmax = vmax
+        if self.output:
+            print("valmin = %s; valmax = %s; \b" % (vmin, vmax))
+
+        self.slider_ax.set_xlim([vmin, vmax])
+        if self.slider.val < vmin or self.slider.val > vmax:
+            if self.slider.val < vmin: self.slider.set_val(vmin)
+            if self.slider.val > vmax: self.slider.set_val(vmax)
+        verts = self.slider.poly.xy                             # update slider filler
+        verts[0] = verts[4] = self.slider.valmin, .25
+        verts[1] = self.slider.valmin, .75
+        verts[2] = self.slider.val, .75
+        verts[3] = self.slider.val, .25
+
+        output = self.output
+        self.output = False
+        self.update_slope()                                     # update slope, legend, and figure
+        self.output = output
 
     def update_slope(self, val=None):
         """
@@ -520,11 +547,17 @@ class FittingLine:
         """
 
         if self.law == "powerlaw":
-            self.line.set_label(r"$%s \propto %s^{%s}$" % (self.y_fit,
-                self.x_fit, self.exp_format.format(self.slope)))    # fitting line label
+            self.line.set_label(r"$%s \sim %s^{%s}$" % (self.y_fit,
+                self.x_fit, self.exp_format.format(self.slope)))        # fitting line label
         elif self.law == "exponential":
-            self.line.set_label(r"$%s \propto e^{%s%s}$" % (self.y_fit,
-                self.exp_format.format(self.slope), self.x_fit))    # fitting line label
+            self.line.set_label(r"$%s \sim e^{%s \times %s}$" % (self.y_fit,
+                self.exp_format.format(self.slope), self.x_fit))        # fitting line label
+        elif self.law == "logarithmic":
+            self.line.set_label(r"$%s \sim %s \log(%s)}$" % (self.y_fit,
+                self.exp_format.format(self.slope), self.x_fit))        # fitting line label
+        elif self.law == "linear":
+            self.line.set_label(r"$%s \sim %s \times %s$" % (self.y_fit,
+                self.exp_format.format(self.slope), self.x_fit))        # fitting line label
 
         self.line.set_label(self.label                                  # fitting line label
             % (self.y_fit, self.exp_format.format(self.slope), self.x_fit))
@@ -539,8 +572,10 @@ class FittingLine:
         """
 
         if self.output:
-            print("x0 = %s; y0 = %s; slope = %s"
-                % (self.x0, self.y0, self.slope))
+            intercept = self.func(self.x0, self.y0, self.slope,
+                0 if self.ax.get_xscale() == "linear" else 1)
+            print("x0 = %s; y0 = %s; slope = %s; intercept = %s"
+                % (self.x0, self.y0, self.slope, intercept))
 
         self.line.set_data(self.ax.get_xlim(), list(map(
             lambda x: self.func(self.x0, self.y0, self.slope, x),
