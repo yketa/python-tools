@@ -111,12 +111,12 @@ Gaussian smoothing of a curve `Y(X)' with kernel standard deviation `sigma'.
  *
  */
 
-pybind11::array_t<double> getWaveVectors2D(
+pybind11::array_t<double> getAllWaveVectors2D(
     pybind11::array_t<double> const& L,
-    double const& q, double const& dq=0.1) {
+    double const& qmin, double const& qmax) {
 /*
 Return wave vectors associated to rectangular box of size `L' such that their
-norms belong to [`q' - `dq'/2, `q' + `dq'/2].
+norms belong to [`qmin', `qmax'].
 Only a single vector of each pair of opposite wave vectors is returned.
 */
 
@@ -128,19 +128,19 @@ Only a single vector of each pair of opposite wave vectors is returned.
     // loop in wave vector space
     std::vector<std::vector<double>> waveVectors(0);
     long long int const xmin = 0;
-    long long int const xmax = floor((q + dq/2)/qx);
+    long long int const xmax = floor(qmax/qx);
     for (long long int x=xmin; x <= xmax; x++) {
         long long int const ymin =
             std::max(
                 0.,
-                ceil(sqrt(pow(q - dq/2, 2) - pow(qx*x, 2))/qy));
+                ceil(sqrt(pow(qmin, 2) - pow(qx*x, 2))/qy));
         long long int const ymax =
             std::min(
-                floor((q + dq/2)/qy),
-                floor(sqrt(pow(q + dq/2, 2) - pow(qx*x, 2))/qy));
+                floor(qmax/qy),
+                floor(sqrt(pow(qmax, 2) - pow(qx*x, 2))/qy));
         for (long long int y=ymin; y <= ymax; y++) {
             double const qq = sqrt(pow(qx*x, 2) + pow(qy*y, 2));
-            if (abs(qq - q) > dq/2) { continue; }   // wave vector norm not within interval
+            if (qq < qmin || qq > qmax) { continue; }   // wave vector norm not within interval
             waveVectors.push_back({qx*x, qy*y});
             if (x != 0 && y != 0) {
                 // if x == 0 then (qx x, qy y) and (-qx x, qy y) are identical
@@ -163,18 +163,28 @@ Only a single vector of each pair of opposite wave vectors is returned.
     return arr;
 }
 
-pybind11::array_t<std::complex<double>> getFT2D(
+pybind11::array_t<double> getWaveVectors2D(
+    pybind11::array_t<double> const& L,
+    double const& q, double const& dq=0.1)
+    { return getAllWaveVectors2D(L, q - dq/2, q + dq/2); }
+/*
+Return wave vectors associated to rectangular box of size `L' such that their
+norms belong to [`q' - `dq'/2, `q' + `dq'/2].
+Only a single vector of each pair of opposite wave vectors is returned.
+*/
+
+pybind11::array_t<std::complex<double>> getAllFT2D(
     pybind11::array_t<double> const& positions,
     pybind11::array_t<double> const& L,
     pybind11::array_t<std::complex<double>> const& values,
-    double const& q, double const& dq=0.1) {
+    double const& qmin, double const& qmax) {
 /*
 Return 2D Fourier transform of `values' associated to 2D `positions' at 2D wave
-vectors `q'.
+vectorswhose norms belong to [`qmin', `qmax'].
 */
 
     // wave vector norms
-    pybind11::array_t<double> qARR = getWaveVectors2D(L, q, dq);
+    pybind11::array_t<double> qARR = getAllWaveVectors2D(L, qmin, qmax);
     if (qARR.request().size == 0)
         { return pybind11::array_t<std::complex<double>>(0); }
     auto _q = qARR.unchecked<2>();      // direct access to wave vectors
@@ -205,6 +215,17 @@ vectors `q'.
 
     return ft;
 }
+
+pybind11::array_t<std::complex<double>> getFT2D(
+    pybind11::array_t<double> const& positions,
+    pybind11::array_t<double> const& L,
+    pybind11::array_t<std::complex<double>> const& values,
+    double const& q, double const& dq=0.1)
+    { return getAllFT2D(positions, L, values, q - dq/2, q + dq/2); }
+/*
+Return 2D Fourier transform of `values' associated to 2D `positions' at 2D wave
+vectors whose norms belong to [`q' - `dq'/2, `q' + `dq'/2].
+*/
 
 /*
  *  Correlations
@@ -425,8 +446,32 @@ PYBIND11_MODULE(bind, m) {
         pybind11::arg("sigma"),
         pybind11::arg("n"));
 
+    m.def("getAllWaveVectors2D", &getAllWaveVectors2D,
+        "Return wave vectors associated to rectangular box.\n"
+        "\n"
+        "Parameters\n"
+        "----------\n"
+        "L : float or (1,)- or (2,) float array-like\n"
+        "    Size of the box.\n"
+        "qmin : float\n"
+        "    Minimum wave vector norm.\n"
+        "qmax : float\n"
+        "    Maximum wave vector norm.\n"
+        "\n"
+        "Returns\n"
+        "-------\n"
+        "wv : (*, 2) float numpy array\n"
+        "    Array of (2\\pi/L nx, 2\\pi/L ny) wave vectors corresponding to\n"
+        "    to the target interval [`qmin', `qmax'].\n"
+        "    NOTE: Only a single vector of each pair of opposite wave\n"
+        "          vectors is returned. Here it is chosen such that ny >= 0.",
+        pybind11::arg("L"),
+        pybind11::arg("qmin"),
+        pybind11::arg("qmax"));
+
     m.def("getWaveVectors2D", &getWaveVectors2D,
         "Return wave vectors associated to rectangular box.\n"
+        "(see getAllWaveVectors2D)\n"
         "\n"
         "Parameters\n"
         "----------\n"
@@ -448,8 +493,40 @@ PYBIND11_MODULE(bind, m) {
         pybind11::arg("q"),
         pybind11::arg("dq")=0.1);
 
+    m.def("getAllFT2D", &getAllFT2D,
+        "Return 2D Fourier transform of delta-peaked values.\n"
+        "\n"
+        ".. math::"
+        "V(k_l) = \\sum_i \\exp(-1i k_l \\cdot r_i) v_i\n"
+        "\n"
+        "Parameters\n"
+        "----------\n"
+        "positions : (*, 2) float array-like\n"
+        "    Positions r_i of delta-peaked values.\n"
+        "L : float or (1,)- or (2,) float array-like\n"
+        "    Size of the box.\n"
+        "values : (*,) complex array-like\n"
+        "    Delta-peaked values v_i.\n"
+        "qmin : float\n"
+        "    Minimum wave vector norm.\n"
+        "qmax : float\n"
+        "    Maximum wave vector norm.\n"
+        "\n"
+        "Returns\n"
+        "-------\n"
+        "ft : (**,) complex numpy array\n"
+        "    Fourier transform of `values' for each wave vector in the\n"
+        "    target  norm interval [`qmin', `qmax'].\n"
+        "    NOTE: These are given by getWaveVectors2D.\n",
+        pybind11::arg("positions"),
+        pybind11::arg("L"),
+        pybind11::arg("values"),
+        pybind11::arg("qmin"),
+        pybind11::arg("qmax"));
+
     m.def("getFT2D", &getFT2D,
         "Return 2D Fourier transform of delta-peaked values.\n"
+        "(see getAllFT2D)\n"
         "\n"
         ".. math::"
         "V(k_l) = \\sum_i \\exp(-1i k_l \\cdot r_i) v_i\n"
