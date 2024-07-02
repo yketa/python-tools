@@ -15,6 +15,8 @@ CFLAGS=-std=c++20 -O3 -Wall -g
 # linker flags may be OS-dependent (https://stackoverflow.com/questions/714100/os-detecting-makefile)
 # macOS needs specific linker flag (https://pybind11.readthedocs.io/en/stable/compiling.html#building-manually)
 LDFLAGS=$(shell [[ `uname -s` == Darwin ]] && echo -undefined dynamic_lookup)
+# CGAL flag (https://stackoverflow.com/questions/8774643/makefile-for-cgal-libcgal8)
+LDFLAGS+=-lgmp
 # -- python flags --
 # find actual python executable by resolving symlinks
 # (https://stackoverflow.com/questions/7665/how-to-resolve-symbolic-links-in-a-shell-script/42918#42918)

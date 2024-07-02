@@ -1,5 +1,7 @@
 /*
 Tools library written in C++ and exposed to Python with pybind11.
+Also uses CGAL (https://www.cgal.org/download.html) for triangulation, this is
+available as a header-only library and relies on Boost.
 */
 
 #include <algorithm>
@@ -8,16 +10,50 @@ Tools library written in C++ and exposed to Python with pybind11.
 #include <complex>
 #include <vector>
 
+#include <CGAL/Exact_predicates_inexact_constructions_kernel.h>
+#include <CGAL/Delaunay_triangulation_2.h>
+#include <CGAL/Triangulation_vertex_base_with_info_2.h>
+typedef std::pair<long int, long int> pair_long_int;
+typedef CGAL::Exact_predicates_inexact_constructions_kernel           K;
+typedef CGAL::Triangulation_vertex_base_with_info_2<pair_long_int, K> Vb;
+typedef CGAL::Triangulation_data_structure_2<Vb>                      Tds;
+typedef CGAL::Delaunay_triangulation_2<K, Tds>                        Delaunay;
+typedef Delaunay::Point                                               Point;
+
 #include <Python.h>
 #include <pybind11/pybind11.h>
 #include <pybind11/numpy.h>
+#include <pybind11/stl.h>
 
 using namespace std::complex_literals;  // using comlex numbers
 
 /*
- *  MISCELLANEOUS
+ *  C++ helper functions
  *
  */
+
+template<class T, class TT> T const _pmod(T const& i, TT const& n)
+/*
+Positive modulo (remainder) i%n (https://stackoverflow.com/questions/14997165).
+*/
+    { return std::fmod(std::fmod(i, n) + n, n); }
+
+template<class T> bool _inVec(std::vector<T> const& vec, T const& val)
+/*
+Is `val' in `vec'?
+*/
+    { return (std::find(vec.begin(), vec.end(), val) != vec.end()); }
+
+template<class T> long int _indexVec(std::vector<T> const& vec, T const& val) {
+/*
+Return index of `val' in `vec' or raise assertion error if it is absent.
+*/
+
+    typename std::vector<T>::const_iterator
+        it = std::find(vec.begin(), vec.end(), val);
+    assert(it != vec.end());    // assert value is present
+    return it - vec.begin();    // value index
+}
 
 std::vector<double> _get2DL(pybind11::array_t<double> const& L) {
 /*
@@ -44,6 +80,11 @@ array of double.
         return std::vector<double>({l(0), l(1)});
     }
 }
+
+/*
+ *  Miscellaneous
+ *
+ */
 
 pybind11::array_t<double> gaussian_smooth_1d(
     pybind11::array_t<double> const& X, pybind11::array_t<double> const& Y,
@@ -411,6 +452,76 @@ Compute histogram with linearly spaced bins.
 }
 
 /*
+ *  Delaunay triangulations
+ *
+ */
+
+std::vector<std::vector<long int>> get2DPeriodicDelaunayNeighbours(
+    pybind11::array_t<double> const& positions,
+    pybind11::array_t<double> const& L) {
+/*
+Compute lists of neighbours given by connected points in a 2D periodic Delaunay
+triangulation.
+
+This computes the triangulation in a closed domain with 9 copies of the orignal
+vertices in order to circumvent the condition of a square domain for CGAL
+periodic Delaunay triangulation. This is thus expected to be non-optimal for
+domains which are square.
+
+https://doc.cgal.org/latest/Triangulation_2/index.html
+https://doc.cgal.org/latest/Triangulation_2/Triangulation_2_2info_insert_with_pair_iterator_2_8cpp-example.html
+https://stackoverflow.com/questions/2067805/how-do-i-iterate-over-faces-in-cgal
+https://stackoverflow.com/questions/7938311/cgal-help-getting-triangles-coordinates-from-delaunay-triangulation
+*/
+
+    std::vector<double> const systemSize = _get2DL(L);
+
+    // check positions and values arrays
+    auto r = positions.unchecked<2>();  // direct access to positions
+    assert(r.ndim() == 2);
+    assert(r.shape(1) == 2);
+    long int const N = r.shape(0);
+
+    // build copies
+    std::vector<std::pair<Point, pair_long_int>> points;
+    for (int m=-1; m <= 1; m++) {
+        for (int n=-1; n <= 1; n++) {
+            long int const copy_index = m*3 + n;
+            for (long int i=0; i < N; i++) {
+                points.push_back(std::make_pair(
+                    Point(
+                        r(i, 0) + m*systemSize[0],
+                        r(i, 1) + n*systemSize[1]),
+                    std::make_pair(i, copy_index)));
+            }
+        }
+    }
+
+    // perform triangulation
+    Delaunay triangulation;
+    triangulation.insert(points.begin(), points.end());
+    assert((long int) triangulation.number_of_vertices() == 9*N);   // each point should have 9 copies
+    assert(triangulation.is_valid());                               // check triangulation is valid
+
+    // retrieve neighbours
+    std::vector<std::vector<long int>> neighbours(N, std::vector<long int>(0));
+    for (auto it=triangulation.finite_faces_begin();
+        it != triangulation.finite_faces_end(); ++it) {                         // loop over faces in the triangulation
+        for (int k=0; k < 3; k++) {                                             // loop over pairs of points in the face
+            pair_long_int const i_info = it->vertex(_pmod(k    , 3))->info();   // info of first point
+            if (std::get<1>(i_info) != 0) continue;                             // only consider original points
+            long int const i = std::get<0>(i_info);                             // index of first point
+            pair_long_int const j_info = it->vertex(_pmod(k + 1, 3))->info();   // info of second point
+            long int const j = std::get<0>(j_info);                             // index of second point
+            if (!_inVec(neighbours[i], j)) neighbours[i].push_back(j);
+            if (!_inVec(neighbours[j], i)) neighbours[j].push_back(i);
+        }
+    }
+
+    return neighbours;
+}
+
+/*
  *  Binding
  *
  */
@@ -650,4 +761,23 @@ PYBIND11_MODULE(bind, m) {
         pybind11::arg("vmin"),
         pybind11::arg("vmax"));
 
+    m.def("get2DPeriodicDelaunayNeighbours", &get2DPeriodicDelaunayNeighbours,
+        "Compute lists of neighbours given by connected points in a 2D\n"
+        "periodic Delaunay triangulation.\n"
+        "\n"
+        "https://en.wikipedia.org/wiki/Delaunay_triangulation\n"
+        "\n"
+        "Parameters\n"
+        "----------\n"
+        "positions : (*, 2) float array-like\n"
+        "    Positions of vertices.\n"
+        "L : float or (1,)- or (2,) float array-like\n"
+        "    Size of the system box in each dimension.\n"
+        "\n"
+        "Returns\n"
+        "-------\n"
+        "neighbours : (*, **) list of int\n"
+        "    Indices of neighbours.",
+        pybind11::arg("positions"),
+        pybind11::arg("L"));
 }
