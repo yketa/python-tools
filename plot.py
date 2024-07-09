@@ -374,7 +374,7 @@ class FittingLine:
             self.func = _powerlaw
             self.label = r"$%s \propto %s^{%s}$"
         elif xscale == "linear" and yscale == "log":
-            self.law == "exponential"
+            self.law = "exponential"
             self.func = _exponential
             self.label = r"$%s \propto e^{%s%s}$"
         elif xscale == "log" and yscale == "linear":
