@@ -3,6 +3,7 @@ Algorithmic and mathematical python tools.
 """
 
 import numpy as np
+from scipy import interpolate
 import math
 
 # https://stackoverflow.com/questions/16981921/relative-imports-in-python-3
@@ -54,6 +55,55 @@ def mean_sterr(values, remove=False, max=None):
     if values.size == 0: return None, None
 
     return values.mean(axis=0), values.std(axis=0)/np.sqrt(values.shape[0])
+
+def wo_mean(arr, axis=-2):
+    """
+    Returns deviation of values in array with respect to mean on the `axis'-th
+    axis if there are more than one value in this dimension.
+
+    Parameters
+    ----------
+    arr : float array like
+        Array of values.
+    axis : int
+        Axis on which to compute the mean. (default: -2)
+
+    Returns
+    -------
+    dev_arr : (arr.shape) float numpy array
+        Deviations from mean of array.
+    """
+
+    arr = np.array(arr)
+    if arr.shape[axis] == 1: return arr
+
+    return arr - arr.mean(axis=axis, keepdims=True)
+
+def corr_scale(s, c, threshold=np.exp(-1)):
+    """
+    Returns scale of correlation function as the extrapolated x-value at which
+    its y-value crosses a given threshold.
+
+    Parameters
+    ----------
+    s : (*,) float array-like
+        x-values fo the correlation function.
+    c : (*,) float array-like
+        y-values fo the correlation function.
+    threshold : float
+        Threshold which defines the scale of the correlation.
+        (default: exp(-1))
+
+    Returns
+    -------
+    ss : float or numpy.nan
+        Scale of the correlation.
+        NOTE: ss = numpy.nan when the correlation function does not cross the
+              threshold.
+    """
+
+    return interpolate.interp1d(c, s, bounds_error=False, fill_value=np.nan)(
+        threshold)
 
 class Counter:
     """
