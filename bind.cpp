@@ -719,6 +719,32 @@ PYBIND11_MODULE(bind, m) {
         pybind11::arg("rmax")=0,
         pybind11::arg("rescale_pair_distribution")=false);
 
+    m.def("_getRadialCorrelations2D",
+        [](
+            pybind11::array_t<double> const positions,
+            pybind11::array_t<double> const L,
+            pybind11::array_t<std::complex<double>> const values1,
+            pybind11::array_t<std::complex<double>> const values2,
+            int const& nBins,
+            bool const& periodic_boundary_conditions,
+            double const& rmin, double const& rmax,
+            bool const& rescale_pair_distribution) {
+            return getRadialCorrelations2D(positions, L, values1, values2,
+                nBins, periodic_boundary_conditions, rmin, rmax,
+                rescale_pair_distribution);
+        },
+        "Same as getRadialCorrelations2D with Numpy array arguments passed\n"
+        "value rather than by reference.",
+        pybind11::arg("positions"),
+        pybind11::arg("L"),
+        pybind11::arg("values1"),
+        pybind11::arg("values2"),
+        pybind11::arg("nBins"),
+        pybind11::arg("periodic_boundary_conditions")=true,
+        pybind11::arg("rmin")=0,
+        pybind11::arg("rmax")=0,
+        pybind11::arg("rescale_pair_distribution")=false);
+
     m.def("getHistogram", &getHistogram,
         "Build an histogram counting the occurences of values within the\n"
         "intervals defined by bins.\n"
