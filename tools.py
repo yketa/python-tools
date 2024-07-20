@@ -9,8 +9,8 @@ import math
 # https://stackoverflow.com/questions/16981921/relative-imports-in-python-3
 # https://stackoverflow.com/questions/3220755/how-to-find-the-target-files-fullabsolute-path-of-the-symbolic-link-or-soft-l
 import sys, os
-sys.path.append(os.path.dirname(os.path.realpath(__file__)))
-from .bind import getHistogram, getHistogramLinear
+sys.path.insert(0, os.path.dirname(os.path.realpath(__file__))) # sets directory of python-tools as first python path
+from bind import getHistogram, getHistogramLinear               # import from shared library bind in directory of python-tools
 
 #####################
 ### MISCELLANEOUS ###
