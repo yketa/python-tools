@@ -1,6 +1,6 @@
 """
 Module plot provides objects and functions to be used in matplotlib plots.
-Requires seaborn for colormaps.
+Requires seaborn for colourmaps.
 """
 
 import numpy as np
@@ -10,8 +10,8 @@ from collections import OrderedDict
 import matplotlib.pyplot as plt
 from mpl_toolkits.axes_grid1 import make_axes_locatable
 from matplotlib.widgets import Slider
-import matplotlib.colors as colors
-import matplotlib.cm as cmx
+from matplotlib.colors import Normalize as Normalise
+from matplotlib.cm import ScalarMappable
 import matplotlib as mpl
 import matplotlib.tri as tr
 
@@ -19,11 +19,11 @@ import seaborn as sns
 
 # DEFAULT VARIABLES
 
-_markers = (                        # default markers list
-    # mpl.markers.MarkerStyle.filled_markers)
+_markers = (                        # --- default markers (see matplotlib.lines.Line2D.filled_markers)
     "o", "^", "s", "*", "X", "D", "8", "v", "<", ">", "h", "H", "p", "d", "P")
+
 if mpl.__version__ >= "3":
-    _linestyles = (
+    _linestyles = (                 # --- default linestyles (see https://matplotlib.org/stable/gallery/lines_bars_and_markers/linestyles.html)
         (0, ()),                    # solid
         (0, (5, 1)),                # densely dashed
         (0, (1, 1)),                # densely dotted
@@ -36,15 +36,16 @@ if mpl.__version__ >= "3":
         (0, (5, 10)),               # loosely dashed
         (0, (1, 10)),               # loosely dotted
         (0, (3, 10, 1, 10)),        # loosely dashdotted
-        (0, (3, 10, 1, 10, 1, 10))  # loosely dashdotdotted
-        )
+        (0, (3, 10, 1, 10, 1, 10))) # loosely dashdotdotted
 else:
-    _linestyles = (
-        "-",    # solid
-        "--",   # dashed
-        "-.",   # dash-dotted
-        ":"     # dotted
-        )
+    _linestyles = (                 # --- default linestyles (see matplotlib.lines.Line2D.lineStyles)
+        "-",                        # solid
+        "--",                       # dashed
+        "-.",                       # dash-dotted
+        ":")                        # dotted
+
+_fillstyles = (                     # --- default fillstyles (see matplotlib.lines.Line2D.fillStyles)
+    "full", "none", "left", "right", "bottom", "top")
 
 # FUNCTIONS AND CLASSES
 
@@ -60,44 +61,48 @@ def set_font_size(font_size):
 
     mpl.rcParams.update({"font.size": font_size})
 
-def list_colormap(value_list, colormap="colorblind", sort=True):
+def list_colours(value_list, colourmap="colorblind", sort=True):
     """
-    Creates hash table of colors from colormap, defined according to value_list
-    index, with value_list elements as keys.
+    Creates hash table of colours from colourmap, defined according to
+    value_list index, with value_list elements as keys.
 
     Parameters
     ----------
     value_list : list
         List of values.
-    colormap : matplotlib colormap or seaborn color palette
-        Colormap or color palette to use. (default: "colorblind")
+    colourmap : matplotlib.cm (colourmap) or str (seaborn colour palette name)
+        Colormap or colour palette to use. (default: "colorblind")
     sort : bool
-        Sort list of values before assigning colors. (default: True)
+        Sort list of values before assigning colours. (default: True)
 
     Returns
     -------
-    colors : hash table
-        Hash table of colors.
+    colours : hash table
+        Hash table of colours.
     """
 
     value_list = list(OrderedDict.fromkeys(value_list))
     if sort: value_list = sorted(value_list)
 
-    try:                # matplotlib colormap
+    try:                # matplotlib colourmap
 
-        cmap = plt.get_cmap(colormap)                               # colormap
-        norm = colors.Normalize(vmin=0, vmax=len(value_list) + 1)   # normalise colormap according to list index
-        scalarMap = cmx.ScalarMappable(norm=norm, cmap=cmap)        # associates scalar to color
+        cmap = plt.get_cmap(colourmap)                      # colourmap
+        norm = Normalise(vmin=0, vmax=len(value_list) + 1)  # normalise colourmap according to list index
+        scalarMap = ScalarMappable(norm=norm, cmap=cmap)    # associates scalar to colour
 
         return {value_list[index]: scalarMap.to_rgba(index + 1)
             for index in range(len(value_list))}
 
     except ValueError:  # seaborn palette
 
-        return {value: color
-            for value, color in zip(
+        return {value: colour
+            for value, colour in zip(
                 value_list,
-                sns.color_palette(colormap, len(value_list)))}
+                sns.color_palette(colourmap, len(value_list)))}
+
+def list_colormap(value_list, colormap="colorblind", sort=True):
+    return list_colours(value_list, colourmap=colormap, sort=True)
+list_colormap.__doc__ = list_colours.__doc__
 
 def list_markers(value_list, marker_list=_markers, sort=True):
     """
@@ -109,7 +114,7 @@ def list_markers(value_list, marker_list=_markers, sort=True):
     value_list : list
         List of values.
     marker_list : list of matplotlib markers
-        List of markers to use. (default: coll_dyn_activem.plot._markers)
+        List of markers to use. (default: _markers)
     sort : bool
         Sort list of values before assigning markers. (default: True)
 
@@ -136,7 +141,7 @@ def list_linestyles(value_list, linestyle_list=_linestyles, sort=True):
         List of values.
     linestyle_list : list of matplotlib line styles
         List of line styles to use.
-        (default: coll_dyn_activem.plot._linestyles)
+        (default: _linestyles)
     sort : bool
         Sort list of values before assigning line styles. (default: True)
 
@@ -150,6 +155,33 @@ def list_linestyles(value_list, linestyle_list=_linestyles, sort=True):
     if sort: value_list = sorted(value_list)
 
     return {value_list[index]: linestyle_list[index]
+        for index in range(len(value_list))}
+
+def list_fillstyles(value_list, fillstyle_list=_fillstyles, sort=True):
+    """
+    Creates hash table of fill styles from fillstyle_list, defined according to
+    value_list index, with value_list elements as keys.
+
+    Parameters
+    ----------
+    value_list : list
+        List of values.
+    fillstyle_list : list of matplotlib fill styles
+        List of fill styles to use.
+        (default: _fillstyles)
+    sort : bool
+        Sort list of values before assigning fill styles. (default: True)
+
+    Returns
+    -------
+    fillstyles : hash table
+        Hash table of fill styles.
+    """
+
+    value_list = list(OrderedDict.fromkeys(value_list))
+    if sort: value_list = sorted(value_list)
+
+    return {value_list[index]: fillstyle_list[index]
         for index in range(len(value_list))}
 
 def contours(x, y, z, vmin=None, vmax=None, contours=20, cmap=plt.cm.jet,
@@ -208,8 +240,8 @@ def contours(x, y, z, vmin=None, vmax=None, contours=20, cmap=plt.cm.jet,
 
     vmin = vmin if not(vmin is None) else z[~np.isnan(z)].min()
     vmax = vmax if not(vmax is None) else z[~np.isnan(z)].max()
-    norm = colors.Normalize(vmin=vmin, vmax=vmax)
-    scalarMap = cmx.ScalarMappable(norm=norm, cmap=cmap)
+    norm = Normalise(vmin=vmin, vmax=vmax)
+    scalarMap = ScalarMappable(norm=norm, cmap=cmap)
 
     fig, ax = plt.subplots()
     divider = make_axes_locatable(ax)
