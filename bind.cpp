@@ -8,6 +8,7 @@ available as a header-only library and relies on Boost.
 #include <assert.h>
 #include <cmath>
 #include <complex>
+#include <numbers>
 #include <vector>
 
 #include <CGAL/Exact_predicates_inexact_constructions_kernel.h>
