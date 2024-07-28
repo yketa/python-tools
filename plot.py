@@ -127,7 +127,7 @@ def list_markers(value_list, marker_list=_markers, sort=True):
     value_list = list(OrderedDict.fromkeys(value_list))
     if sort: value_list = sorted(value_list)
 
-    return {value_list[index]: marker_list[index]
+    return {value_list[index]: marker_list[index%len(marker_list)]
         for index in range(len(value_list))}
 
 def list_linestyles(value_list, linestyle_list=_linestyles, sort=True):
@@ -154,7 +154,7 @@ def list_linestyles(value_list, linestyle_list=_linestyles, sort=True):
     value_list = list(OrderedDict.fromkeys(value_list))
     if sort: value_list = sorted(value_list)
 
-    return {value_list[index]: linestyle_list[index]
+    return {value_list[index]: linestyle_list[index%len(linestyle_list)]
         for index in range(len(value_list))}
 
 def list_fillstyles(value_list, fillstyle_list=_fillstyles, sort=True):
