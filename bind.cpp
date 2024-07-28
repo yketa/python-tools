@@ -522,6 +522,36 @@ https://stackoverflow.com/questions/7938311/cgal-help-getting-triangles-coordina
     return neighbours;
 }
 
+std::vector<std::vector<std::vector<double>>> get2DPeriodicVectorsToNeighbours(
+    pybind11::array_t<double> const& positions,
+    pybind11::array_t<double> const& L) {
+
+    std::vector<double> const systemSize = _get2DL(L);
+
+    // check positions and values arrays
+    auto r = positions.unchecked<2>();  // direct access to positions
+    assert(r.ndim() == 2);
+    assert(r.shape(1) == 2);
+    long int const N = r.shape(0);
+
+    // compute neighbours
+    std::vector<std::vector<long int>> const neighbours =   // neighbours from Delaunay triangulation
+        get2DPeriodicDelaunayNeighbours(positions, L);
+
+    // compute vectors to neighbours
+    std::vector<std::vector<std::vector<double>>> vectorsToNeighbours;
+    for (long int i=0; i < N; i++) {
+        vectorsToNeighbours.push_back(std::vector<std::vector<double>>());
+        for (long int j : neighbours[i]) {
+            vectorsToNeighbours[i].push_back({
+                std::remainder(r(j, 0) - r(i, 0), systemSize[0]),
+                std::remainder(r(j, 1) - r(i, 1), systemSize[1])});
+        }
+    }
+
+    return vectorsToNeighbours;
+}
+
 /*
  *  Binding
  *
@@ -797,14 +827,34 @@ PYBIND11_MODULE(bind, m) {
         "Parameters\n"
         "----------\n"
         "positions : (*, 2) float array-like\n"
-        "    Positions of vertices.\n"
+        "    Positions of points.\n"
         "L : float or (1,)- or (2,) float array-like\n"
-        "    Size of the system box in each dimension.\n"
+        "    Size of the box in each dimension.\n"
         "\n"
         "Returns\n"
         "-------\n"
         "neighbours : (*, **) list of int\n"
         "    Indices of neighbours.",
+        pybind11::arg("positions"),
+        pybind11::arg("L"));
+
+    m.def(
+        "get2DPeriodicVectorsToNeighbours", &get2DPeriodicVectorsToNeighbours,
+        "Compute vectors to neighbours given by connected points in a 2D\n"
+        "periodic Delaunay triangulation.\n"
+        "(see get2DPeriodicDelaunayNeighbours)\n"
+        "\n"
+        "Parameters\n"
+        "----------\n"
+        "positions : (*, 2) float array-like\n"
+        "    Positions of positions.\n"
+        "L : float or (1,)- or (2,) float array-like\n"
+        "    Size of the box in each dimension.\n"
+        "\n"
+        "Returns\n"
+        "-------\n"
+        "vectorsToNeighbours : (*, **, 2) list of int\n"
+        "    Vectors to neighbouring points.",
         pybind11::arg("positions"),
         pybind11::arg("L"));
 }
