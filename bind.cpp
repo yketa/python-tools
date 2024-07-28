@@ -524,7 +524,8 @@ https://stackoverflow.com/questions/7938311/cgal-help-getting-triangles-coordina
 
 std::vector<std::vector<std::vector<double>>> get2DPeriodicVectorsToNeighbours(
     pybind11::array_t<double> const& positions,
-    pybind11::array_t<double> const& L) {
+    pybind11::array_t<double> const& L,
+    std::vector<std::vector<long int>> const& neighbours_) {
 
     std::vector<double> const systemSize = _get2DL(L);
 
@@ -535,8 +536,13 @@ std::vector<std::vector<std::vector<double>>> get2DPeriodicVectorsToNeighbours(
     long int const N = r.shape(0);
 
     // compute neighbours
-    std::vector<std::vector<long int>> const neighbours =   // neighbours from Delaunay triangulation
-        get2DPeriodicDelaunayNeighbours(positions, L);
+    std::vector<std::vector<long int>> const neighbours =
+        [&positions, &L, &neighbours_]() {
+            if (neighbours_.size() == 0)    // compute neighbours from Delaunay triangulation
+                { return get2DPeriodicDelaunayNeighbours(positions, L); }
+            else                            // use user-defined neighbours
+                { return neighbours_; }
+        }();
 
     // compute vectors to neighbours
     std::vector<std::vector<std::vector<double>>> vectorsToNeighbours;
@@ -840,9 +846,9 @@ PYBIND11_MODULE(bind, m) {
 
     m.def(
         "get2DPeriodicVectorsToNeighbours", &get2DPeriodicVectorsToNeighbours,
-        "Compute vectors to neighbours given by connected points in a 2D\n"
-        "periodic Delaunay triangulation.\n"
-        "(see get2DPeriodicDelaunayNeighbours)\n"
+        "Compute vectors to neighbours. These are user-defined or computed\n"
+        "as connected points in a 2D periodic Delaunay triangulation. (see\n"
+        "get2DPeriodicDelaunayNeighbours)\n"
         "\n"
         "Parameters\n"
         "----------\n"
@@ -850,11 +856,16 @@ PYBIND11_MODULE(bind, m) {
         "    Positions of positions.\n"
         "L : float or (1,)- or (2,) float array-like\n"
         "    Size of the box in each dimension.\n"
+        "neighbours : (*, **) int list or (0,) list\n"
+        "    User-defined neighbours. (default: [])\n"
+        "    NOTE: if len(neighbours) == 0 then neighbours are computed from\n"
+        "          the 2D periodic Delaunay triangulation.\n"
         "\n"
         "Returns\n"
         "-------\n"
         "vectorsToNeighbours : (*, **, 2) list of int\n"
         "    Vectors to neighbouring points.",
         pybind11::arg("positions"),
-        pybind11::arg("L"));
+        pybind11::arg("L"),
+        pybind11::arg("neighbours")=std::vector<std::vector<int>>());
 }
