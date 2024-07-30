@@ -91,7 +91,7 @@ def plot_pbc(positions, L, diameters=None, colours=None, arrows=None,
         fig.canvas.toolbar.back()
     except AttributeError:
         ax.cla()
-        _set_lim(ax, vm)
+        _set_lim(ax, L)
 
     # CIRCLES
 
