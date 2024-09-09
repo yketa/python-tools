@@ -15,7 +15,9 @@ from matplotlib.cm import ScalarMappable
 import matplotlib as mpl
 import matplotlib.tri as tr
 
-import seaborn as sns
+import sys
+try: import seaborn
+except ModuleNotFoundError: pass
 
 # DEFAULT VARIABLES
 
@@ -95,10 +97,12 @@ def list_colours(value_list, colourmap="colorblind", sort=True):
 
     except ValueError:  # seaborn palette
 
+        assert "seaborn" in sys.modules
+
         return {value: colour
             for value, colour in zip(
                 value_list,
-                sns.color_palette(colourmap, len(value_list)))}
+                seaborn.color_palette(colourmap, len(value_list)))}
 
 def list_colormap(value_list, colormap="colorblind", sort=True):
     return list_colours(value_list, colourmap=colormap, sort=True)
@@ -181,7 +185,7 @@ def list_fillstyles(value_list, fillstyle_list=_fillstyles, sort=True):
     value_list = list(OrderedDict.fromkeys(value_list))
     if sort: value_list = sorted(value_list)
 
-    return {value_list[index]: fillstyle_list[index]
+    return {value_list[index]: fillstyle_list[index%len(fillstyle_list)]
         for index in range(len(value_list))}
 
 def contours(x, y, z, vmin=None, vmax=None, contours=20, cmap=plt.cm.jet,
