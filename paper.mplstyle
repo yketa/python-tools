@@ -86,7 +86,7 @@ font.stretch        : normal
 # settings for axes and ticks. Special text sizes can be defined
 # relative to font.size, using the following values: xx-small, x-small,
 # small, medium, large, x-large, xx-large, larger, or smaller
-font.size           : 45.0
+font.size           : 50.0
 font.serif     : Computer Modern Roman, DejaVu Serif, New Century Schoolbook, Century Schoolbook L, Utopia, ITC Bookman, Bookman, Nimbus Roman No9 L, Times New Roman, Times, Palatino, Charter, serif
 font.sans-serif: DejaVu Sans, Lucida Grande, Verdana, Geneva, Lucid, Arial, Helvetica, Avant Garde, sans-serif
 font.cursive   : Apple Chancery, Textile, Zapf Chancery, Sand, Script MT, Felipa, cursive
@@ -173,11 +173,11 @@ axes.linewidth      : 1.0     # edge linewidth
 axes.grid           : False   # display grid or not
 axes.grid.which     : major
 axes.grid.axis      : both
-axes.titlesize      : 45   # fontsize of the axes title
+axes.titlesize      : x-large # fontsize of the axes title
 axes.titlepad       : 5.0     # pad between axes and title in points
 axes.titleweight    : normal  # font weight for axes title
-axes.labelsize      : 45      # fontsize of the x any y labels
-axes.labelpad       : -7.5     # space between label and axis
+axes.labelsize      : x-large # fontsize of the x any y labels
+axes.labelpad       : -15     # space between label and axis
 axes.labelweight    : normal  # weight of the x and y labels
 axes.labelcolor     : k
 axes.axisbelow      : False   # whether axis gridlines and ticks are below
@@ -238,10 +238,10 @@ xtick.minor.size     : 5      # minor tick size in points
 xtick.minor.visible  : False
 xtick.major.width    : 0.5    # major tick width in points
 xtick.minor.width    : 0.5    # minor tick width in points
-xtick.major.pad      : 4      # distance to major tick label in points
+xtick.major.pad      : 12.5   # distance to major tick label in points
 xtick.minor.pad      : 4      # distance to the minor tick label in points
 xtick.color          : k      # color of the tick labels
-xtick.labelsize      : 35     # fontsize of the tick labels
+xtick.labelsize      : medium # fontsize of the tick labels
 xtick.direction      : in     # direction: in, out, or inout
 xtick.major.top      : True   # draw x axis top major ticks
 xtick.major.bottom   : True   # draw x axis bottom major ticks
@@ -251,15 +251,15 @@ xtick.alignment : center
 
 ytick.left           : True   # draw ticks on the left side
 ytick.right          : True   # draw ticks on the right side
-ytick.major.size     : 10      # major tick size in points
-ytick.minor.size     : 5       # minor tick size in points
+ytick.major.size     : 10     # major tick size in points
+ytick.minor.size     : 5      # minor tick size in points
 ytick.minor.visible  : False
 ytick.major.width    : 0.5    # major tick width in points
 ytick.minor.width    : 0.5    # minor tick width in points
 ytick.major.pad      : 4      # distance to major tick label in points
 ytick.minor.pad      : 4      # distance to the minor tick label in points
 ytick.color          : k      # color of the tick labels
-ytick.labelsize      : 35     # fontsize of the tick labels
+ytick.labelsize      : medium # fontsize of the tick labels
 ytick.direction      : in     # direction: in, out, or inout
 ytick.major.left     : True   # draw y axis left major ticks
 ytick.major.right    : True   # draw y axis right major ticks
@@ -278,7 +278,7 @@ legend.fancybox      : False  # if True, use a rounded box for the
                               # legend, else a rectangle
 legend.loc           : upper right
 legend.numpoints     : 1      # the number of points in the legend line
-legend.fontsize      : 45
+legend.fontsize      : x-large
 legend.borderpad     : 0.4    # border whitespace in fontsize units
 legend.markerscale   : 1.0    # the relative size of legend markers vs. original
 # the following dimensions are in axes coords
@@ -311,10 +311,10 @@ figure.frameon : True
 
 # The figure subplot parameters.  All dimensions are a fraction of the
 # figure width or height
-figure.subplot.left    : 0.17   # the left side of the subplots of the figure
-figure.subplot.right   : 0.96   # the right side of the subplots of the figure
-figure.subplot.bottom  : 0.11   # the bottom of the subplots of the figure
-figure.subplot.top     : 0.94   # the top of the subplots of the figure
+figure.subplot.left    : 0.16   # the left side of the subplots of the figure
+figure.subplot.right   : 0.95   # the right side of the subplots of the figure
+figure.subplot.bottom  : 0.13   # the bottom of the subplots of the figure
+figure.subplot.top     : 0.97   # the top of the subplots of the figure
 figure.subplot.wspace  : 0.2    # the amount of width reserved for space between subplots,
                                 # expressed as a fraction of the average axis width
 figure.subplot.hspace  : 0.2    # the amount of height reserved for space between subplots,
