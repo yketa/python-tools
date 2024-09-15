@@ -311,12 +311,12 @@ Return 2D radial correlations of `values1' and `values2' (1D or 2D).
     // initialise returned histograms and computation quantities
     pybind11::array_t<std::complex<double>> correlations({nBins, 2});
     auto c = correlations.mutable_unchecked<2>();               // direct access to correlation histogram
-    for (int bin=0; bin < c.shape(0); bin++) {
+    for (int bin=0; bin < nBins; bin++) {
         c(bin, 0) = rmin + (bin + 1./2.)*(rmax - rmin)/nBins;   // centre of correlation histogram bins
         c(bin, 1) = 0;                                          // height of correlation histogram bins
     }
     std::vector<int> occupancy(nBins, 0);                       // occupancy of histogram bins (for normlaisation)
-    int nPairs = 0;                                             // number of unique pairs of points (for normalisation)
+    long int nPairs = 0;                                        // number of unique pairs of points (for normalisation)
 
     // check positions and values arrays
     pybind11::array_t<std::complex<double>> const values2 =
@@ -380,15 +380,70 @@ Return 2D radial correlations of `values1' and `values2' (1D or 2D).
             c(bin, 1) /= occupancy[bin];
             // correction by pair distribution function
             if (!rescale_pair_distribution) { continue; }
-            if (bin == 0 && rmin == 0) { continue; }      // do not consider 0th bin
+            if (bin == 0 && rmin == 0) { continue; }                    // do not consider 0th bin
             c(bin, 1) /=
-                ((double) occupancy[bin]/nPairs)            // histogram value
-                *area/((rmax - rmin)/nBins)                 // normalisation
-                /(2*M_PI*(rmin + bin*(rmax - rmin)/nBins)); // radial projection
+                ((double) occupancy[bin]/nPairs)                        // histogram value
+                *area/((rmax - rmin)/nBins)                             // normalisation
+                /(2*std::numbers::pi*c(bin, 0));                        // radial projection
         }
     }
 
     return correlations;
+}
+
+pybind11::array_t<double> getPairDistribution(
+    pybind11::array_t<double> const& positions,
+    pybind11::array_t<double> const& L,
+    double const& rmin, double const& rmax, int const& nBins,
+    bool const& periodic_boundary_conditions=true) {
+/*
+Compute histogram, with `nBins' between `vmin' and `vmax', of distances between
+pairs of positions.
+*/
+
+    // system size and positions
+    std::vector<double> const systemSize = _get2DL(L);
+    auto r = positions.unchecked<2>();  // direct access to positions
+
+    // initialise returned histograms and computation quantities
+    pybind11::array_t<double> pairDistribution({nBins, 2});
+    auto g = pairDistribution.mutable_unchecked<2>();           // direct access to pair distribution
+    for (int bin=0; bin < nBins; bin++) {
+        g(bin, 0) = rmin + (bin + 1./2.)*(rmax - rmin)/nBins;   // centre of pair distribution histogram bins
+        g(bin, 1) = 0;                                          // height of pair distribution histogram bins
+    }
+    long int nPairs = 0;                                        // number of unique pairs of points
+
+    // compute histogram
+    int bin;
+    double const dbin = (rmax - rmin)/nBins;
+    std::vector<double> disp(2, 0);
+    double dist;
+    for (int i=0; i < r.shape(0); i++) {
+        for (int j=i; j < r.shape(0); j++) {
+            if (i != j) { nPairs++; }
+            disp = {r(j, 0) - r(i, 0), r(j, 1) - r(i, 1)};                  // difference vector
+            if (periodic_boundary_conditions) {
+                for (int dim=0; dim < 2; dim++) {
+                    disp[dim] = std::remainder(disp[dim], systemSize[dim]); // wrap around periodic boundary conditions
+                }
+            }
+            dist = std::sqrt(disp[0]*disp[0] + disp[1]*disp[1]);            // distance corresponding to difference vector
+            if (dist < rmin || dist >= rmax) { continue; }                  // distance out of bins
+            bin = (dist - rmin)/dbin;                                       // bin corresponding to distance
+            g(bin, 1) += 1;
+        }
+    }
+
+    // normalise
+    for (int bin=0; bin < nBins; bin++) {
+        g(bin, 1) /=
+            ((double) nPairs)                                       // histogram value
+            *((rmax - rmin)/nBins)/(systemSize[0]*systemSize[1])    // normalisation
+            *2*std::numbers::pi*g(bin, 0);                          // radial average
+    }
+
+    return pairDistribution;
 }
 
 /*
@@ -710,7 +765,7 @@ PYBIND11_MODULE(bind, m) {
         "with linear size(s) `L'.\n"
         "\n"
         ".. math::"
-        "C(|r1 - r0|) = \\langle values1(r0) \\cdot values2(r1)^* \\rangle\n"
+        "C(|r1 - r0|) ~ \\langle values1(r0) \\cdot values2(r1)^* \\rangle\n"
         "\n"
         "Parameters\n"
         "----------\n"
@@ -755,6 +810,44 @@ PYBIND11_MODULE(bind, m) {
         pybind11::arg("rmin")=0,
         pybind11::arg("rmax")=0,
         pybind11::arg("rescale_pair_distribution")=false);
+
+    m.def("getPairDistribution", &getPairDistribution,
+        "Compute histogram of distances between pairs of positions.\n"
+        "\n"
+        ".. math::"
+        "g(r) ~ \\langle \\delta(r - |r_i - r_j|) \\rangle\n"
+        "\n"
+        "Parameters\n"
+        "----------\n"
+        "positions : (*, 2) float array-like\n"
+        "    Positions.\n"
+        "L : float or (1,)- or (2,) float array-like\n"
+        "    Size of the system box in each dimension.\n"
+        "nBins : int\n"
+        "    Number of intervals of distances on which to compute the pair\n"
+        "    distribution.\n"
+        "rmin : float\n"
+        "    Minimum distance (included) at which to compute the pair\n"
+        "    distribution.\n"
+        "rmax : float\n"
+        "    Maximum distance (excluded) at which to compute the pair\n"
+        "    distribution.\n"
+        "periodic_boundary_conditions : bool\n"
+        "    Use periodic boundary conditions when computing distances\n"
+        "    between points. (default: True)\n"
+        "\n"
+        "Returns\n"
+        "-------\n"
+        "pairDistribution : (nBins, 2) complex Numpy array\n"
+        "    Array of (r, g(r)) where r is the centre of the pair\n"
+        "    distribution histogram bin and g(r) is the height of the pair\n"
+        "    distribution histogram bin.",
+        pybind11::arg("positions"),
+        pybind11::arg("L"),
+        pybind11::arg("rmin"),
+        pybind11::arg("rmax"),
+        pybind11::arg("nBins"),
+        pybind11::arg("periodic_boundary_conditions")=true);
 
     m.def("_getRadialCorrelations2D",
         [](
