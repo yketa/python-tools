@@ -10,6 +10,7 @@ from collections import OrderedDict
 import matplotlib.pyplot as plt
 from mpl_toolkits.axes_grid1 import make_axes_locatable
 from matplotlib.widgets import Slider
+from matplotlib.colors import Colormap as Colourmap
 from matplotlib.colors import Normalize as Normalise
 from matplotlib.cm import ScalarMappable
 import matplotlib as mpl
@@ -72,7 +73,8 @@ def list_colours(value_list, colourmap="colorblind", sort=True):
     ----------
     value_list : list
         List of values.
-    colourmap : matplotlib.cm (colourmap) or str (seaborn colour palette name)
+    colourmap : matplotlib.colors.Colormap (colourmap)
+                or str (matplotlib or seaborn colour palette name)
         Colormap or colour palette to use. (default: "colorblind")
     sort : bool
         Sort list of values before assigning colours. (default: True)
@@ -88,9 +90,10 @@ def list_colours(value_list, colourmap="colorblind", sort=True):
 
     try:                # matplotlib colourmap
 
-        cmap = plt.get_cmap(colourmap)                      # colourmap
-        norm = Normalise(vmin=0, vmax=len(value_list) + 1)  # normalise colourmap according to list index
-        scalarMap = ScalarMappable(norm=norm, cmap=cmap)    # associates scalar to colour
+        if issubclass(colourmap.__class__, Colourmap): cmap = colourmap # input colourmap
+        else: cmap = plt.get_cmap(colourmap)                            # matplotlib colourmap
+        norm = Normalise(vmin=0, vmax=len(value_list) + 1)              # normalise colourmap according to list index
+        scalarMap = ScalarMappable(norm=norm, cmap=cmap)                # associates scalar to colour
 
         return {value_list[index]: scalarMap.to_rgba(index + 1)
             for index in range(len(value_list))}
