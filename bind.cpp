@@ -620,6 +620,17 @@ std::vector<std::vector<std::vector<double>>> get2DPeriodicVectorsToNeighbours(
 
 PYBIND11_MODULE(bind, m) {
 
+    m.def("angle2",
+        pybind11::vectorize([](double const& x, double const& y) {
+            double const angle = acos(x/sqrt(x*x + y*y));
+            return _pmod(((y > 0 ? 1 : - 1)*angle)
+                + std::numbers::pi, 2*std::numbers::pi)
+                - std::numbers::pi;
+        }),
+        "Angle of vector (x, y) with respect to horizontal axis in [-pi, pi].",
+        pybind11::arg("x"),
+        pybind11::arg("y"));
+
     m.def("gaussian_smooth_1d", &gaussian_smooth_1d,
         "From y-coordinates Y at corresponding x-coordinates X, returns\n"
         "smoothed y-coordinates with smoothing function exp(-(x/sigma)^2) at\n"
