@@ -14,7 +14,8 @@ def _update_canvas(fig):
     if not(plt.fignum_exists(fig.number)):  # throw error when window is closed
         raise WindowClosedException
 
-def plot_pbc(positions, L, diameters=None, colours=None, arrows=None,
+def plot_pbc(positions, L, diameters=None,
+    colours=None, alpha=None, arrows=None,
     fig=None, ax=None, update=True):
     """
     Plot system with periodic boundary conditions. Particles are represented
@@ -33,6 +34,9 @@ def plot_pbc(positions, L, diameters=None, colours=None, arrows=None,
         Colours to apply to circles representing particles. (default: None)
         NOTE: if colours is None then circles have black edges and transparent
               faces.
+    alpha : (*,) float array-like or None
+        Opacity of circles' colours. (default: None)
+        NOTE: if alpha is None then opacity for all particles is set to 1.
     arrows : (*, 2) float array-like or None
         Arrows to add to circles representing particles. (default: None)
         NOTE: if arrows is None then no arrows are added.
@@ -105,11 +109,14 @@ def plot_pbc(positions, L, diameters=None, colours=None, arrows=None,
     else:
         fill = True
 
+    if type(alpha) is type(None):
+        alpha = np.full((N,), fill_value=1, dtype=int)
+
     # orignal
     circles = list(map(
         lambda i: plt.Circle(
             positions[i], diameters[i]/2,
-            color=colours[i], fill=fill),
+            color=(colours[i], alpha[i]), fill=fill),
         range(N)))
     # periodic boundary copies
     for dim in range(2):
