@@ -12,6 +12,7 @@ from mpl_toolkits.axes_grid1 import make_axes_locatable
 from matplotlib.widgets import Slider
 from matplotlib.colors import Colormap as Colourmap
 from matplotlib.colors import Normalize as Normalise
+from matplotlib.colors import LinearSegmentedColormap, ListedColormap
 from matplotlib.cm import ScalarMappable
 import matplotlib as mpl
 import matplotlib.tri as tr
@@ -688,4 +689,58 @@ def _linear(x0, y0, slope, x):
     """
 
     return (x - x0) * slope + y0
+
+# COLOURMAP
+
+_rainbow = (    # https://en.wikipedia.org/wiki/Rainbow_flag_(LGBT)#/media/File:Gay_Pride_Flag.svg
+    (0.467, 0.000, 0.533),
+    (0.000, 0.298, 1.000),
+    (0.008, 0.506, 0.129),
+    (1.000, 0.933, 0.000),
+    (1.000, 0.553, 0.000),
+    (0.898, 0.000, 0.000))
+
+def _make_cycle(colours):
+    """
+    Cyclic colourmap from linear interpolation between colours.
+
+    https://wildsilicon.com/blog/2018/cyclical-colormaps/
+
+    Parameters
+    ----------
+    colours : (*, 3) float array-like
+        Array of RGB colours.
+
+    Returns
+    -------
+    cmap : matplotlib.colors.ListedColormap
+        Cyclic colourmap.
+    """
+
+    colours = np.array(colours)
+    assert(colours.ndim == 2 and (colours.shape[1] in (3, 4)))
+    N = colours.shape[0]
+    C = 256
+
+    def _mod(a, b): return min(abs(a)%abs(b), abs(a)%-abs(b), key=abs)
+    def _dist(x, y, L): return np.abs(_mod(x - y, L))
+    def _kernel(i, n, N): return max(0, 1 - _dist(i/C, (1/2 + n)/N, 1)*N)
+
+    cycle = []
+    for i in range(C):
+        weights = np.array(list(map(
+            lambda n: _kernel(i, n, N),
+            range(N))))
+        cycle += [np.sum(
+            list(map(
+                lambda c, w: w*c/weights.sum(),
+                *(colours, weights))),
+            axis=0)]
+
+    return ListedColormap(cycle)
+
+rainbow_cmap = LinearSegmentedColormap.from_list("rainbow", # rainbow colourmap
+    [(i/(len(_rainbow) - 1), t) for i, t in enumerate(_rainbow)])
+
+rainbow_cycle_cmap = _make_cycle(_rainbow)                  # cyclic rainbow colourmap
 
