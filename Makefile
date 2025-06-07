@@ -23,7 +23,7 @@ LDFLAGS+=-lgmp
 PYTHON:=$(shell perl -MCwd -le 'print Cwd::abs_path(shift)' "`which $(PYTHON)`")
 PYTHONFLAGS=
 # python libraries
-# PYTHONFLAGS+=$(shell $(PYTHON)-config --includes)
+PYTHONFLAGS+=$(shell $(PYTHON)-config --includes)
 PYTHONFLAGS+=$(shell $(PYTHON) -m pybind11 --includes)
 
 .PHONY: clean
