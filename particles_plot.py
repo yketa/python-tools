@@ -5,6 +5,7 @@ Plot simulations of particles.
 import numpy as np
 import matplotlib.pyplot as plt
 from matplotlib.collections import PatchCollection
+from numbers import Number
 
 class WindowClosedException(Exception): pass
 
@@ -27,8 +28,8 @@ def plot_pbc(positions, L, diameters=None,
         Positions of centres of particles.
     L : float or (1,) or (2,) float array-like
         System size.
-    diameters : (*,) float array-like or None
-        Diameters of circles representing particles. (default: None)
+    diameters : (*,) float array-like, float, or None
+        Diameter(s) of circles representing particles. (default: None)
         NOTE: if diameters is None then all diameters are set to 1.
     colours : (*,) str array-like or None
         Colours to apply to circles representing particles. (default: None)
@@ -67,11 +68,11 @@ def plot_pbc(positions, L, diameters=None,
     if L.ndim == 0: L = np.array([L, L])
     elif L.ndim == 1 and L.size == 1: L = np.array([L[0], L[0]])
     elif L.ndim > 1 or L.size != 2: raise ValueError("Invalid 2D system size.")
-    positions = positions%L # positions in [0, L]^2
+    positions = (positions + L/2)%L - L/2   # positions in [-L/2, L/2]^2
 
     def _set_lim(ax_, L_):
-        ax_.set_xlim([0, L[0]])
-        ax_.set_ylim([0, L[1]])
+        ax_.set_xlim([-L[0]/2, L[0]/2])
+        ax_.set_ylim([-L[1]/2, L[1]/2])
         ax_.set_aspect("equal")
 
     if type(fig) == type(None) or type(ax) == type(None):
@@ -101,6 +102,8 @@ def plot_pbc(positions, L, diameters=None,
 
     if type(diameters) is type(None):
         diameters = np.full((N,), fill_value=1, dtype=float)
+    elif isinstance(diameters, Number):
+        diameters = np.full((N,), fill_value=diameters, dtype=float)
     max_diameter = max(diameters)
 
     if type(colours) is type(None):
