@@ -5,6 +5,7 @@ Plot simulations of particles.
 import numpy as np
 import matplotlib.pyplot as plt
 from matplotlib.collections import PatchCollection
+from matplotlib.patches import FancyArrow
 from numbers import Number
 
 class WindowClosedException(Exception): pass
@@ -147,7 +148,8 @@ def plot_pbc(positions, L, diameters=None,
     if not(type(arrows) is type(None)):
 
         arrows = list(map(
-            lambda i: plt.Arrow(*positions[i], *arrows[i], color="black"),
+            lambda i: FancyArrow(*positions[i], *arrows[i],
+                    width=0.1, length_includes_head=True, color="black"),
             range(N)))
 
         coll = PatchCollection(
