@@ -33,9 +33,20 @@ all: bind.so
 clean:
 	rm -rf *.o *.so
 
+# OBJECT FILES
+
+%.o: %.cpp
+	$(CXX) -o $@ -c $< $(CFLAGS)
+
+assert.o: assert.cpp assert.hpp
+
+bind.o: bind.cpp assert.hpp
+
 # LIBRARIES
 
 %.so: CFLAGS+=-fPIC $(PYTHONFLAGS)
-%.so: %.cpp
+%.so: %.o
 	$(CXX) -o $@ -shared $^ $(CFLAGS) $(LDFLAGS)
+
+bind.so: assert.o bind.o
 

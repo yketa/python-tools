@@ -2,3 +2,5 @@
 *.so
 test*
 **/__pycache__
+*.o
+*.pyi

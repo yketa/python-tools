@@ -5,7 +5,6 @@ available as a header-only library and relies on Boost.
 */
 
 #include <algorithm>
-#include <assert.h>
 #include <cmath>
 #include <complex>
 #include <numbers>
@@ -25,6 +24,8 @@ typedef Delaunay::Point                                               Point;
 #include <pybind11/pybind11.h>
 #include <pybind11/numpy.h>
 #include <pybind11/stl.h>
+
+#include "assert.hpp"
 
 using namespace std::complex_literals;  // using comlex numbers
 
@@ -500,10 +501,56 @@ Compute histogram with linearly spaced bins.
 
     double const dbin = (vmax - vmin)/nBins;
     for (pybind11::ssize_t i=0; i < v.shape(0); i++) {
-        if (v(i) < vmin || v(i) > vmax) { continue; }
+        if (v(i) < vmin || v(i) >= vmax) { continue; }
         long int const bin = (v(i) - vmin)/dbin;
         h(bin)++;
     }
+    return histogram;
+}
+
+pybind11::array_t<double> getBinnedAverageLinear(
+    pybind11::array_t<double> const& bin_values,
+    pybind11::array_t<double> const& values,
+    long int const& nBins, double const& vmin, double const& vmax) {
+/*
+Compute averages of `values' per linearly spaced binned positions `bin_values'.
+*/
+
+    // check input values
+    auto bv = bin_values.unchecked<1>();
+    auto v = values.unchecked<1>();
+    assert(bv.ndim() == 1);
+    assert(v.ndim() == 1);
+    assert(bv.shape(0) == v.shape(0));
+
+    // create histogram and count
+    pybind11::array_t<double> histogram({nBins, (long int) 2});
+    auto h = histogram.mutable_unchecked<2>();
+    pybind11::array_t<long int> count(nBins, 0);
+    auto c = count.mutable_unchecked<1>();
+
+    // initialise histogram and count
+    double const dbin = (vmax - vmin)/nBins;
+    for (pybind11::ssize_t i=0; i < h.shape(0); i++) {
+        h(i, 0) = (i + 0.5)*dbin;   // bin gets centre value
+        h(i, 1) = 0;
+        c(i) = 0;
+    }
+
+    // compute sums of values in each bin
+    for (pybind11::ssize_t i=0; i < bv.shape(0); i++) {
+        if (bv(i) < vmin || bv(i) >= vmax) { continue; }
+        long int const bin = (bv(i) - vmin)/dbin;
+        h(bin, 1) += v(i);
+        c(bin)++;
+    }
+
+    // compute average in each bin
+    for (pybind11::ssize_t i=0; i < h.shape(0); i++) {
+        if (c(i) == 0) { continue; }
+        h(i, 1) /= c(i);
+    }
+
     return histogram;
 }
 
@@ -923,6 +970,33 @@ PYBIND11_MODULE(bind, m) {
         "-------\n"
         "histogram : (nBins,) int numpy array\n"
         "    Histogram.",
+        pybind11::arg("values"),
+        pybind11::arg("nBins"),
+        pybind11::arg("vmin"),
+        pybind11::arg("vmax"));
+
+    m.def("getBinnedAverageLinear", &getBinnedAverageLinear,
+        "Compute averages of values depending on their positions in linearly\n"
+        "spaced bins beween a minimum and a maximum value.\n"
+        "\n"
+        "Parameters\n"
+        "----------\n"
+        "bin_values : (*,) float array-like\n"
+        "    Positions of values.\n"
+        "values : (*,) float array-like\n"
+        "    Values to average.\n"
+        "nBins : int\n"
+        "    Number of bins.\n"
+        "vmin : float\n"
+        "    Minimum value of the bins (included).\n"
+        "vmax : float\n"
+        "    Maximum value of the bins (excluded).\n"
+        "\n"
+        "Returns\n"
+        "-------\n"
+        "histogram : (nBins, 2) float numpy array\n"
+        "    Array of bin values and averages within the bin.",
+        pybind11::arg("bin_values"),
         pybind11::arg("values"),
         pybind11::arg("nBins"),
         pybind11::arg("vmin"),
