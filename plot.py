@@ -17,7 +17,7 @@ from matplotlib.cm import ScalarMappable
 import matplotlib as mpl
 import matplotlib.tri as tr
 
-import sys
+import sys, traceback
 try: import seaborn
 except ModuleNotFoundError: pass
 
@@ -64,6 +64,29 @@ def set_font_size(font_size):
     """
 
     mpl.rcParams.update({"font.size": font_size})
+
+def savefig(fig, name, *args, **kwargs):
+    """
+    Save matplotlib figure.
+
+    Dirty fix to "SyntaxError: not a PNG file" when using concurrent matplotlib
+    instances.
+
+    Parameters
+    ----------
+    fig : matplotlib.figure.Figure
+        Figure object.
+    name : str
+        Name of file in which to save figure.
+    """
+
+    while True:
+        try:
+            fig.savefig(name, *args, **kwargs)
+            break
+        except SyntaxError:
+            print(traceback.format_exc(), file=sys.stderr)
+            pass
 
 def list_colours(value_list, colourmap="colorblind", sort=True):
     """
