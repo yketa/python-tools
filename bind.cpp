@@ -83,6 +83,47 @@ array of double.
     }
 }
 
+template<class T> std::vector<long int> _argSort(
+    std::vector<T> const& vec) {
+/*
+Indices of elements of `vec' in increasing order.
+https://stackoverflow.com/questions/1577475/c-sorting-and-keeping-track-of-indexes
+*/
+
+    // initialise original index locations
+    std::vector<long int> indices(vec.size());
+    std::iota(indices.begin(), indices.end(), 0);
+
+    // sort indices based on comparing values in `vec'
+    // using std::stable_sort instead of std::sort
+    // to avoid unnecessary index re-orderings
+    // when `vec' contains elements of equal values
+    std::stable_sort(indices.begin(), indices.end(),
+        [&vec](long int const& i1, long int const& i2)
+            { return vec[i1] < vec[i2]; });
+
+    return indices;
+}
+
+template<class T, class TT> std::vector<T> _keySort(
+    std::vector<T> const& vec, std::vector<TT> const& keys) {
+/*
+Sort elements of `vec' in increasing order of elements of keys.
+*/
+
+    std::vector<T> sortedVec;
+    for (long int i : _argSort<TT>(keys)) sortedVec.push_back(vec[i]);
+
+    return sortedVec;
+}
+
+double angle2(double const& x, double const& y) {
+    double const angle = acos(x/sqrt(x*x + y*y));
+    return _pmod(((y > 0 ? 1 : - 1)*angle)
+        + std::numbers::pi, 2*std::numbers::pi)
+        - std::numbers::pi;
+}
+
 /*
  *  Miscellaneous
  *
@@ -628,6 +669,10 @@ std::vector<std::vector<std::vector<double>>> get2DPeriodicVectorsToNeighbours(
     pybind11::array_t<double> const& positions,
     pybind11::array_t<double> const& L,
     std::vector<std::vector<long int>> const& neighbours_) {
+/*
+Compute list of vectors from each point to its neighbours given by connected
+points in a 2D periodic Delaunay triangulation.
+*/
 
     std::vector<double> const systemSize = _get2DL(L);
 
@@ -660,6 +705,113 @@ std::vector<std::vector<std::vector<double>>> get2DPeriodicVectorsToNeighbours(
     return vectorsToNeighbours;
 }
 
+std::vector<std::vector<std::vector<double>>> get2DPeriodicVoronoiVertices(
+    pybind11::array_t<double> const& positions,
+    pybind11::array_t<double> const& L,
+    std::vector<std::vector<long int>> const& neighbours_) {
+/*
+Compute vertices of Voronoi cells associated to each point from its 2D periodic
+Delaunay triangulation.
+*/
+
+    std::vector<double> const systemSize = _get2DL(L);
+
+    // check positions and values arrays
+    auto r = positions.unchecked<2>();  // direct access to positions
+    assert(r.ndim() == 2);
+    assert(r.shape(1) == 2);
+    long int const N = r.shape(0);
+
+    // compute neighbours
+    std::vector<std::vector<long int>> const neighbours =
+        [&positions, &L, &neighbours_]() {
+            if (neighbours_.size() == 0)    // compute neighbours from Delaunay triangulation
+                { return get2DPeriodicDelaunayNeighbours(positions, L); }
+            else                            // use user-defined neighbours
+                { return neighbours_; }
+        }();
+
+    // compute vertices of Voronoi tesselation
+    std::vector<std::vector<std::vector<double>>> vertices;
+    for (long int i=0; i < N; i++) {
+        vertices.push_back(std::vector<std::vector<double>>());
+        long int const nNeighbours = neighbours[i].size();
+        // sort neighbours in anticlockwise order
+        std::vector<double> angles;
+        for (long int j : neighbours[i]) {
+            angles.push_back(angle2(
+                std::remainder(r(j, 0) - r(i, 0), systemSize[0]),
+                std::remainder(r(j, 1) - r(i, 1), systemSize[1])));
+        }
+        std::vector<long int> const sortedNeighbours =
+            _keySort<long int, double>(neighbours[i], angles);
+        // compute vertices
+        for (long int m=0; m < nNeighbours; m++) {
+            // neighbours
+            long int const j = sortedNeighbours[_pmod(m + 0, nNeighbours)];     // index of neighbour
+            long int const k = sortedNeighbours[_pmod(m + 1, nNeighbours)];     // index of following neighbour
+            // relative vectors
+            double const x1 = std::remainder(r(j, 0) - r(i, 0), systemSize[0]); // x0 to x1
+            double const y1 = std::remainder(r(j, 1) - r(i, 1), systemSize[1]); // y0 to y1
+            double const x2 = std::remainder(r(k, 0) - r(i, 0), systemSize[0]); // x0 to x2
+            double const y2 = std::remainder(r(k, 1) - r(i, 1), systemSize[1]); // y0 to y2
+            // linear system parameters
+            double const c = (x1*x1)/2 + (y1*y1)/2;
+            double const f = (x2*x2)/2 + (y2*y2)/2;
+            // intersection of mediators
+            vertices[i].push_back({
+                r(i, 0) + (y2*c - y1*f)/(x1*y2 - x2*y1),
+                r(i, 1) + (x1*f - x2*c)/(x1*y2 - x2*y1)});
+        }
+    }
+
+    return vertices;
+}
+
+pybind11::array_t<double> get2DPeriodicVoronoiVolumes(
+    pybind11::array_t<double> const& positions,
+    pybind11::array_t<double> const& L,
+    std::vector<std::vector<long int>> const& neighbours_) {
+/*
+Compute volume of Voronoi cells associated to each point from its 2D periodic
+Delaunay triangulation.
+*/
+
+    std::vector<double> const systemSize = _get2DL(L);
+
+    // check positions and values arrays
+    auto r = positions.unchecked<2>();  // direct access to positions
+    assert(r.ndim() == 2);
+    assert(r.shape(1) == 2);
+    long int const N = r.shape(0);
+
+    // compute vertices
+    std::vector<std::vector<std::vector<double>>> vertices =
+        get2DPeriodicVoronoiVertices(positions, L, neighbours_);
+
+    // compute volumes
+    pybind11::array_t<double> volumes({N});
+    auto v = volumes.mutable_unchecked<1>();
+    for (long int i=0; i < N; i++) {
+        v(i) = 0;
+        long int const nNeighbours = vertices[i].size();
+        for (long int l=0; l < nNeighbours; l++) {
+            // neighbours
+            long int const m = _pmod(l + 0, nNeighbours);   // list index of neighbour
+            long int const n = _pmod(l + 1, nNeighbours);   // list index of following neighbour
+            // relative vectors
+            double const x1 = vertices[i][m][0] - r(i, 0);  // x0 to x1
+            double const y1 = vertices[i][m][1] - r(i, 1);  // y0 to y1
+            double const x2 = vertices[i][n][0] - r(i, 0);  // x0 to x2
+            double const y2 = vertices[i][n][1] - r(i, 1);  // y0 to y2
+            // volume
+            v(i) += (x1*y2 - x2*y1)/2;
+        }
+    }
+
+    return volumes;
+}
+
 /*
  *  Binding
  *
@@ -668,12 +820,7 @@ std::vector<std::vector<std::vector<double>>> get2DPeriodicVectorsToNeighbours(
 PYBIND11_MODULE(bind, m) {
 
     m.def("angle2",
-        pybind11::vectorize([](double const& x, double const& y) {
-            double const angle = acos(x/sqrt(x*x + y*y));
-            return _pmod(((y > 0 ? 1 : - 1)*angle)
-                + std::numbers::pi, 2*std::numbers::pi)
-                - std::numbers::pi;
-        }),
+        pybind11::vectorize(angle2),
         "Angle of vector (x, y) with respect to horizontal axis in [-pi, pi].",
         pybind11::arg("x"),
         pybind11::arg("y"));
@@ -1031,7 +1178,7 @@ PYBIND11_MODULE(bind, m) {
         "Parameters\n"
         "----------\n"
         "positions : (*, 2) float array-like\n"
-        "    Positions of positions.\n"
+        "    Positions of points.\n"
         "L : float or (1,)- or (2,) float array-like\n"
         "    Size of the box in each dimension.\n"
         "neighbours : (*, **) int list or (0,) list\n"
@@ -1043,6 +1190,56 @@ PYBIND11_MODULE(bind, m) {
         "-------\n"
         "vectorsToNeighbours : (*, **, 2) list of int\n"
         "    Vectors to neighbouring points.",
+        pybind11::arg("positions"),
+        pybind11::arg("L"),
+        pybind11::arg("neighbours")=std::vector<std::vector<int>>());
+
+    m.def(
+        "get2DPeriodicVoronoiVertices", &get2DPeriodicVoronoiVertices,
+        "Compute vertices of Voronoi cells associated to each point from its\n"
+        "2D periodic Delaunay triangulation (see\n"
+        "get2DPeriodicDelaunayNeighbours)\n"
+        "\n"
+        "Parameters\n"
+        "----------\n"
+        "positions : (*, 2) float array-like\n"
+        "    Positions of points.\n"
+        "L : float or (1,)- or (2,) float array-like\n"
+        "    Size of the box in each dimension.\n"
+        "neighbours : (*, **) int list or (0,) list\n"
+        "    User-defined neighbours. (default: [])\n"
+        "    NOTE: if len(neighbours) == 0 then neighbours are computed from\n"
+        "          the 2D periodic Delaunay triangulation.\n"
+        "\n"
+        "Returns\n"
+        "-------\n"
+        "vertices : (*, **, 2) list of float\n"
+        "    Vertices of the Voronoi cells associated to each point.",
+        pybind11::arg("positions"),
+        pybind11::arg("L"),
+        pybind11::arg("neighbours")=std::vector<std::vector<int>>());
+
+    m.def(
+        "get2DPeriodicVoronoiVolumes", &get2DPeriodicVoronoiVolumes,
+        "Compute volumes  of Voronoi cells associated to each point from its\n"
+        "2D periodic Delaunay triangulation (see\n"
+        "get2DPeriodicVoronoiVertices)\n"
+        "\n"
+        "Parameters\n"
+        "----------\n"
+        "positions : (*, 2) float array-like\n"
+        "    Positions of points.\n"
+        "L : float or (1,)- or (2,) float array-like\n"
+        "    Size of the box in each dimension.\n"
+        "neighbours : (*, **) int list or (0,) list\n"
+        "    User-defined neighbours. (default: [])\n"
+        "    NOTE: if len(neighbours) == 0 then neighbours are computed from\n"
+        "          the 2D periodic Delaunay triangulation.\n"
+        "\n"
+        "Returns\n"
+        "-------\n"
+        "volumes : (*,) float numpy array\n"
+        "    Volumes of the Voronoi cells associated to each point.",
         pybind11::arg("positions"),
         pybind11::arg("L"),
         pybind11::arg("neighbours")=std::vector<std::vector<int>>());

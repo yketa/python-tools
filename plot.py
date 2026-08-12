@@ -3,6 +3,8 @@ Module plot provides objects and functions to be used in matplotlib plots.
 Requires seaborn for colourmaps.
 """
 
+from python_tools.bind import get2DPeriodicVoronoiVertices
+
 import numpy as np
 
 from collections import OrderedDict
@@ -10,6 +12,7 @@ from collections import OrderedDict
 import matplotlib.pyplot as plt
 from mpl_toolkits.axes_grid1 import make_axes_locatable
 from matplotlib.widgets import Slider
+from matplotlib.collections import PatchCollection
 from matplotlib.colors import Colormap as Colourmap
 from matplotlib.colors import Normalize as Normalise
 from matplotlib.colors import LinearSegmentedColormap, ListedColormap
@@ -316,6 +319,28 @@ def combine_hex_values(d):
     zpad = lambda x: x if len(x)==2 else "0" + x
 
     return zpad(hex(red)[2:]) + zpad(hex(green)[2:]) + zpad(hex(blue)[2:])
+
+def voronoi_tesselation(positions, L):
+    """
+    Voronoi tesselation of points in 2D periodic plane.
+
+    Parameters
+    ----------
+    positions : (*, 2) float array-like
+        Positions of points.
+    L : float or (1,)- or (2,) float array-like
+        Size of the box in each dimension.
+
+    Returns
+    -------
+    polygons : matplotlib.collections.PatchCollection
+        Polygons corresponding to Voronoi tesselation.
+    """
+
+    return PatchCollection(
+        list(map(
+            lambda vertices: plt.Polygon(vertices, closed=True),
+            get2DPeriodicVoronoiVertices(positions, L))))
 
 class FittingLine:
     """
