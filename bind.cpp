@@ -812,6 +812,42 @@ Delaunay triangulation.
     return volumes;
 }
 
+pybind11::array_t<long int> getParticlesWithinSquareBox(
+    pybind11::array_t<double> const& centreBox,
+    double const& sizeBox,
+    pybind11::array_t<double> const& positions,
+    pybind11::array_t<double> const& L) {
+/*
+Compute particles indices which are within a square box.
+*/
+
+    std::vector<double> const systemSize = _get2DL(L);
+
+    // check centre of box
+    auto c = centreBox.unchecked<1>();  // direct access to centre of box
+    assert(c.ndim() == 1);
+    assert(c.shape(0) == 2);
+
+    // check positions and values arrays
+    auto r = positions.unchecked<2>();  // direct access to positions
+    assert(r.ndim() == 2);
+    assert(r.shape(1) == 2);
+    long int const N = r.shape(0);
+
+    // compute particles indices within box
+    std::vector<long int> particles;
+    for (long int i=0; i < N; i++) {
+        double const dx = std::remainder(r(i, 0) - c(0), systemSize[0]);
+        double const dy = std::remainder(r(i, 1) - c(1), systemSize[1]);
+        if (abs(dx) < sizeBox/2 && abs(dy) < sizeBox/2) {
+            particles.push_back(i);
+        }
+    }
+
+    return pybind11::array_t<long int>(
+        {(long int) particles.size()}, &(particles[0]));
+}
+
 /*
  *  Binding
  *
@@ -924,7 +960,7 @@ PYBIND11_MODULE(bind, m) {
         "-------\n"
         "ft : (**,) complex numpy array\n"
         "    Fourier transform of `values' for each wave vector in the\n"
-        "    target  norm interval [`qmin', `qmax'].\n"
+        "    target norm interval [`qmin', `qmax'].\n"
         "    NOTE: These are given by getWaveVectors2D.\n",
         pybind11::arg("positions"),
         pybind11::arg("L"),
@@ -956,7 +992,7 @@ PYBIND11_MODULE(bind, m) {
         "-------\n"
         "ft : (**,) complex numpy array\n"
         "    Fourier transform of `values' for each wave vector in the\n"
-        "    target  norm interval [`q' - `dq'/2, `q' + `dq'/2].\n"
+        "    target norm interval [`q' - `dq'/2, `q' + `dq'/2].\n"
         "    NOTE: These are given by getWaveVectors2D.\n",
         pybind11::arg("positions"),
         pybind11::arg("L"),
@@ -1221,7 +1257,7 @@ PYBIND11_MODULE(bind, m) {
 
     m.def(
         "get2DPeriodicVoronoiVolumes", &get2DPeriodicVoronoiVolumes,
-        "Compute volumes  of Voronoi cells associated to each point from its\n"
+        "Compute volumes of Voronoi cells associated to each point from its\n"
         "2D periodic Delaunay triangulation (see\n"
         "get2DPeriodicVoronoiVertices)\n"
         "\n"
@@ -1243,4 +1279,28 @@ PYBIND11_MODULE(bind, m) {
         pybind11::arg("positions"),
         pybind11::arg("L"),
         pybind11::arg("neighbours")=std::vector<std::vector<int>>());
+
+    m.def(
+        "getParticlesWithinSquareBox", &getParticlesWithinSquareBox,
+        "Compute particles indices which are within a square box.\n"
+        "\n"
+        "Parameters\n"
+        "----------\n"
+        "centreBox : (2,) float array-like\n"
+        "    Position of the centre of box.\n"
+        "sizeBox : float\n"
+        "    Linear size of the box.\n"
+        "positions : (*, 2) float array-like\n"
+        "    Positions of points.\n"
+        "L : float or (1,)- or (2,) float array-like\n"
+        "    Size of the box in each dimension.\n"
+        "\n"
+        "Returns\n"
+        "-------\n"
+        "particles : (*,) float numpy array\n"
+        "    Indices of the particles within the box.",
+        pybind11::arg("centreBox"),
+        pybind11::arg("sizeBox"),
+        pybind11::arg("positions"),
+        pybind11::arg("L"));
 }
