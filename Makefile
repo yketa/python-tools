@@ -28,7 +28,7 @@ PYTHONFLAGS+=$(shell $(PYTHON) -m pybind11 --includes)
 
 .PHONY: clean
 
-all: bind.so
+all: bind.so bind_gpu.so
 
 clean:
 	rm -rf *.o *.so
@@ -40,7 +40,7 @@ clean:
 
 assert.o: assert.cpp assert.hpp
 
-bind.o: bind.cpp assert.hpp
+bind.o: bind.cpp bind.hpp assert.hpp
 
 # LIBRARIES
 
@@ -48,5 +48,17 @@ bind.o: bind.cpp assert.hpp
 %.so: %.o
 	$(CXX) -o $@ -shared $^ $(CFLAGS) $(LDFLAGS)
 
-bind.so: assert.o bind.o
+bind.so: CFLAGS+=-fopenmp
+bind.so: bind.o assert.o
+
+# CUDA LIBRARIES
+
+CUCC=nvcc -forward-unknown-to-host-compiler
+CUFLAGS=-std=c++20 -O3 `python -m pybind11 --includes` -Wall -fPIC
+
+bind_gpu.o: bind_gpu.cu bind.hpp assert.hpp
+	$(CUCC) -x cu -dc $< -o $@ $(CUFLAGS)
+
+bind_gpu.so: bind_gpu.o assert.o
+	$(CUCC) $^ -o $@ -shared $(CUFLAGS)
 

@@ -10,6 +10,8 @@ available as a header-only library and relies on Boost.
 #include <numbers>
 #include <vector>
 
+using namespace std::complex_literals;  // using comlex numbers
+
 #include <CGAL/Exact_predicates_inexact_constructions_kernel.h>
 #include <CGAL/Delaunay_triangulation_2.h>
 #include <CGAL/Triangulation_vertex_base_with_info_2.h>
@@ -25,104 +27,24 @@ typedef Delaunay::Point                                               Point;
 #include <pybind11/numpy.h>
 #include <pybind11/stl.h>
 
+#include <omp.h>
+#pragma omp declare reduction( \
+    vec_long_int_plus : std::vector<long int> : \
+        std::transform( \
+            omp_out.begin(), omp_out.end(), \
+            omp_in.begin(), omp_out.begin(), \
+            std::plus<long int>())) \
+    initializer(omp_priv = decltype(omp_orig)(omp_orig.size()))
+#pragma omp declare reduction( \
+    vec_complex_double_plus : std::vector<std::complex<double>> : \
+        std::transform( \
+            omp_out.begin(), omp_out.end(), \
+            omp_in.begin(), omp_out.begin(), \
+            std::plus<std::complex<double>>())) \
+    initializer(omp_priv = decltype(omp_orig)(omp_orig.size()))
+
 #include "assert.hpp"
-
-using namespace std::complex_literals;  // using comlex numbers
-
-/*
- *  C++ helper functions
- *
- */
-
-template<class T, class TT> T const _pmod(T const& i, TT const& n)
-/*
-Positive modulo (remainder) i%n (https://stackoverflow.com/questions/14997165).
-*/
-    { return std::fmod(std::fmod(i, n) + n, n); }
-
-template<class T> bool _inVec(std::vector<T> const& vec, T const& val)
-/*
-Is `val' in `vec'?
-*/
-    { return (std::find(vec.begin(), vec.end(), val) != vec.end()); }
-
-template<class T> long int _indexVec(std::vector<T> const& vec, T const& val) {
-/*
-Return index of `val' in `vec' or raise assertion error if it is absent.
-*/
-
-    typename std::vector<T>::const_iterator
-        it = std::find(vec.begin(), vec.end(), val);
-    assert(it != vec.end());    // assert value is present
-    return it - vec.begin();    // value index
-}
-
-std::vector<double> _get2DL(pybind11::array_t<double> const& L) {
-/*
-Return (2,) box size dimensions from array `L' which may be a double or an
-array of double.
-*/
-
-    auto l = L.unchecked<>();
-    if (l.ndim() > 1) {                             // system size is 2D or higher-D: impossible
-        throw std::invalid_argument("L must be a 0- or 1-dimensional.");
-    }
-    else if (l.size() == 0) {                       // no system size: impossible
-        throw std::invalid_argument("System size cannot be empty.");
-    }
-    else if (l.size() == 1) {                       // system size is the same for both dimensions
-        if (l.ndim() == 0) {
-            return std::vector<double>({l(), l()});
-        }
-        else {  // l.ndim() == 1
-            return std::vector<double>({l(0), l(0)});
-        }
-    }
-    else {                                          // system size is different for the two dimensions
-        return std::vector<double>({l(0), l(1)});
-    }
-}
-
-template<class T> std::vector<long int> _argSort(
-    std::vector<T> const& vec) {
-/*
-Indices of elements of `vec' in increasing order.
-https://stackoverflow.com/questions/1577475/c-sorting-and-keeping-track-of-indexes
-*/
-
-    // initialise original index locations
-    std::vector<long int> indices(vec.size());
-    std::iota(indices.begin(), indices.end(), 0);
-
-    // sort indices based on comparing values in `vec'
-    // using std::stable_sort instead of std::sort
-    // to avoid unnecessary index re-orderings
-    // when `vec' contains elements of equal values
-    std::stable_sort(indices.begin(), indices.end(),
-        [&vec](long int const& i1, long int const& i2)
-            { return vec[i1] < vec[i2]; });
-
-    return indices;
-}
-
-template<class T, class TT> std::vector<T> _keySort(
-    std::vector<T> const& vec, std::vector<TT> const& keys) {
-/*
-Sort elements of `vec' in increasing order of elements of keys.
-*/
-
-    std::vector<T> sortedVec;
-    for (long int i : _argSort<TT>(keys)) sortedVec.push_back(vec[i]);
-
-    return sortedVec;
-}
-
-double angle2(double const& x, double const& y) {
-    double const angle = acos(x/sqrt(x*x + y*y));
-    return _pmod(((y > 0 ? 1 : - 1)*angle)
-        + std::numbers::pi, 2*std::numbers::pi)
-        - std::numbers::pi;
-}
+#include "bind.hpp"
 
 /*
  *  Miscellaneous
@@ -195,80 +117,18 @@ Gaussian smoothing of a curve `Y(X)' with kernel standard deviation `sigma'.
  *
  */
 
-pybind11::array_t<double> getAllWaveVectors2D(
-    pybind11::array_t<double> const& L,
-    double const& qmin, double const& qmax) {
-/*
-Return wave vectors associated to rectangular box of size `L' such that their
-norms belong to [`qmin', `qmax'].
-Only a single vector of each pair of opposite wave vectors is returned.
-*/
-
-    // check system size
-    std::vector<double> const systemSize = _get2DL(L);
-    double const qx = 2*std::numbers::pi/systemSize[0];
-    double const qy = 2*std::numbers::pi/systemSize[1];
-
-    // loop in wave vector space
-    std::vector<std::vector<double>> waveVectors(0);
-    long long int const xmin = 0;
-    long long int const xmax = floor(qmax/qx);
-    for (long long int x=xmin; x <= xmax; x++) {
-        long long int const ymin =
-            std::max(
-                0.,
-                ceil(sqrt(pow(qmin, 2) - pow(qx*x, 2))/qy));
-        long long int const ymax =
-            std::min(
-                floor(qmax/qy),
-                floor(sqrt(pow(qmax, 2) - pow(qx*x, 2))/qy));
-        for (long long int y=ymin; y <= ymax; y++) {
-            double const qq = sqrt(pow(qx*x, 2) + pow(qy*y, 2));
-            if (qq < qmin || qq > qmax) { continue; }   // wave vector norm not within interval
-            waveVectors.push_back({qx*x, qy*y});
-            if (x != 0 && y != 0) {
-                // if x == 0 then (qx x, qy y) and (-qx x, qy y) are identical
-                // if y == 0 then (qx x, qy y) and (-qx x, qy y) are opposite
-                waveVectors.push_back({-qx*x, qy*y});
-            }
-        }
-    }
-
-    // create and return array
-    if (waveVectors.size() == 0) { return pybind11::array_t<double>(); }
-    pybind11::array_t<double>
-        arr(std::vector<ptrdiff_t>{(long long int) waveVectors.size(), 2});
-    auto a = arr.mutable_unchecked<2>();
-    for (long long int l=0; l < (long long int) waveVectors.size(); l++) {
-        for (int dim=0; dim < 2; dim++) {
-            a(l, dim) = waveVectors[l][dim];
-        }
-    }
-    return arr;
-}
-
-pybind11::array_t<double> getWaveVectors2D(
-    pybind11::array_t<double> const& L,
-    double const& q, double const& dq=0.1)
-    { return getAllWaveVectors2D(L, q - dq/2, q + dq/2); }
-/*
-Return wave vectors associated to rectangular box of size `L' such that their
-norms belong to [`q' - `dq'/2, `q' + `dq'/2].
-Only a single vector of each pair of opposite wave vectors is returned.
-*/
-
 pybind11::array_t<std::complex<double>> getAllFT2D(
     pybind11::array_t<double> const& positions,
     pybind11::array_t<double> const& L,
     pybind11::array_t<std::complex<double>> const& values,
-    double const& qmin, double const& qmax) {
+    double const& qmin, double const& qmax, int const& nmax=0) {
 /*
 Return 2D Fourier transform of `values' associated to 2D `positions' at 2D wave
-vectorswhose norms belong to [`qmin', `qmax'].
+vectors whose norms belong to [`qmin', `qmax'].
 */
 
     // wave vector norms
-    pybind11::array_t<double> qARR = getAllWaveVectors2D(L, qmin, qmax);
+    pybind11::array_t<double> qARR = getAllWaveVectors2D(L, qmin, qmax, nmax);
     if (qARR.request().size == 0)
         { return pybind11::array_t<std::complex<double>>(0); }
     auto _q = qARR.unchecked<2>();      // direct access to wave vectors
@@ -290,6 +150,7 @@ vectorswhose norms belong to [`qmin', `qmax'].
     // compute Fourier transform
     pybind11::array_t<std::complex<double>> ft({n});
     auto FT = ft.mutable_unchecked<1>();
+    #pragma omp parallel for shared(FT)
     for (long int l=0; l < n; l++) {        // loop over wave vectors
         FT(l) = 0;                                                              // initialise
         for (long int i=0; i < N; i++) {    // loop over particles
@@ -355,9 +216,10 @@ Return 2D radial correlations of `values1' and `values2' (1D or 2D).
     auto c = correlations.mutable_unchecked<2>();               // direct access to correlation histogram
     for (int bin=0; bin < nBins; bin++) {
         c(bin, 0) = rmin + (bin + 1./2.)*(rmax - rmin)/nBins;   // centre of correlation histogram bins
-        c(bin, 1) = 0;                                          // height of correlation histogram bins
+        //c(bin, 1) = 0;                                          // height of correlation histogram bins
     }
-    std::vector<int> occupancy(nBins, 0);                       // occupancy of histogram bins (for normlaisation)
+    std::vector<std::complex<double>> height(nBins, 0);         // height of correlation histogram bins
+    std::vector<long int> occupancy(nBins, 0);                  // occupancy of histogram bins (for normlaisation)
     long int nPairs = 0;                                        // number of unique pairs of points (for normalisation)
 
     // check positions and values arrays
@@ -383,12 +245,18 @@ Return 2D radial correlations of `values1' and `values2' (1D or 2D).
     bool const values_is_1D = (v1.ndim() == 1);
 
     // product computation for correlations
+    int i, j;
     int bin;
     double const dbin = (rmax - rmin)/nBins;
     std::vector<double> disp(2, 0);
     double dist;
-    for (int i=0; i < r.shape(0); i++) {
-        for (int j=i; j < r.shape(0); j++) {
+    #pragma omp parallel for \
+        reduction(+:nPairs) \
+        reduction(vec_long_int_plus:occupancy) \
+        reduction(vec_complex_double_plus:height) \
+        private(i, j, bin, disp, dist)
+    for (i=0; i < r.shape(0); i++) {        // loop over all particles
+        for (j=i; j < r.shape(0); j++) {    // loop over different particles with unique pairs
             if (i != j) { nPairs++; }
             disp = {r(j, 0) - r(i, 0), r(j, 1) - r(i, 1)};                  // difference vector
             if (periodic_boundary_conditions) {
@@ -400,13 +268,13 @@ Return 2D radial correlations of `values1' and `values2' (1D or 2D).
             if (dist < rmin || dist >= rmax) { continue; }                  // distance out of bins
             bin = (dist - rmin)/dbin;                                       // bin corresponding to distance
             if (values_is_1D) {
-                c(bin, 1) +=                                                // product for scalars
+                height[bin] +=                                              // product for scalars
                     (v1(i)*std::conj(v2(j))
                         + v1(j)*std::conj(v2(i)))/2.;
             }
             else {
                 for (int d=0; d < v1.shape(1); d++) {
-                    c(bin, 1) +=                                            // scalar product for 1D vectors
+                    height[bin] +=                                          // scalar product for 1D vectors
                         (v1(i, d)*std::conj(v2(j, d))
                             + v1(j, d)*std::conj(v2(i, d)))/2.;
                 }
@@ -414,6 +282,7 @@ Return 2D radial correlations of `values1' and `values2' (1D or 2D).
             occupancy[bin] += 1;
         }
     }
+    for (int bin=0; bin < nBins; bin++) c(bin, 1) = height[bin];
 
     // normalise
     for (int bin=0; bin < nBins; bin++) {
@@ -855,6 +724,9 @@ Compute particles indices which are within a square box.
 
 PYBIND11_MODULE(bind, m) {
 
+    m.def("omp_get_max_threads", &omp_get_max_threads);
+    m.def("omp_set_num_threads", &omp_set_num_threads);
+
     m.def("angle2",
         pybind11::vectorize(angle2),
         "Angle of vector (x, y) with respect to horizontal axis in [-pi, pi].",
@@ -901,6 +773,9 @@ PYBIND11_MODULE(bind, m) {
         "    Minimum wave vector norm.\n"
         "qmax : float\n"
         "    Maximum wave vector norm.\n"
+        "nmax : int\n"
+        "    Maximum number of wave vectors to return. (default: 0)\n"
+        "    NOTE: if nmax == 0 returns all wave vectors.\n"
         "\n"
         "Returns\n"
         "-------\n"
@@ -911,7 +786,8 @@ PYBIND11_MODULE(bind, m) {
         "          vectors is returned. Here it is chosen such that ny >= 0.",
         pybind11::arg("L"),
         pybind11::arg("qmin"),
-        pybind11::arg("qmax"));
+        pybind11::arg("qmax"),
+        pybind11::arg("nmax")=0);
 
     m.def("getWaveVectors2D", &getWaveVectors2D,
         "Return wave vectors associated to rectangular box.\n"
@@ -955,6 +831,9 @@ PYBIND11_MODULE(bind, m) {
         "    Minimum wave vector norm.\n"
         "qmax : float\n"
         "    Maximum wave vector norm.\n"
+        "nmax : int\n"
+        "    Maximum number of wave vectors to use. (default: 0)\n"
+        "    NOTE: if nmax == 0 uses all wave vectors.\n"
         "\n"
         "Returns\n"
         "-------\n"
@@ -966,7 +845,8 @@ PYBIND11_MODULE(bind, m) {
         pybind11::arg("L"),
         pybind11::arg("values"),
         pybind11::arg("qmin"),
-        pybind11::arg("qmax"));
+        pybind11::arg("qmax"),
+        pybind11::arg("nmax")=0);
 
     m.def("getFT2D", &getFT2D,
         "Return 2D Fourier transform of delta-peaked values.\n"
@@ -1038,7 +918,7 @@ PYBIND11_MODULE(bind, m) {
         "\n"
         "Returns\n"
         "-------\n"
-        "correlations : (nBins, 2) complex Numpy array\n"
+        "correlations : (nBins, 2) complex numpy array\n"
         "    Array of (r, C(r)) where r is the centre of the correlation\n"
         "    histogram bin and C(r) is the height of the correlation\n"
         "    histogram bin.",
@@ -1079,7 +959,7 @@ PYBIND11_MODULE(bind, m) {
         "\n"
         "Returns\n"
         "-------\n"
-        "pairDistribution : (nBins, 2) complex Numpy array\n"
+        "pairDistribution : (nBins, 2) complex numpy array\n"
         "    Array of (r, g(r)) where r is the centre of the pair\n"
         "    distribution histogram bin and g(r) is the height of the pair\n"
         "    distribution histogram bin.",
@@ -1104,7 +984,7 @@ PYBIND11_MODULE(bind, m) {
                 nBins, periodic_boundary_conditions, rmin, rmax,
                 rescale_pair_distribution);
         },
-        "Same as getRadialCorrelations2D with Numpy array arguments passed\n"
+        "Same as getRadialCorrelations2D with numpy array arguments passed\n"
         "value rather than by reference.",
         pybind11::arg("positions"),
         pybind11::arg("L"),
